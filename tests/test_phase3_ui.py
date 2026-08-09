@@ -29,6 +29,7 @@ def hello():
 async def test_theme_command_switches_screen_immediately():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test():
+        assert app.mouse_mode == "select"
         await app._submit_prompt("/theme light")
         assert app.theme_name == "light"
         assert app.screen.has_class("light")

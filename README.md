@@ -62,7 +62,7 @@ The TUI provides streaming Markdown with syntax-highlighted fenced code, tables,
 /quit
 ```
 
-Text selection and clipboard behavior remain terminal-native. Use `/mouse select` (or Ctrl+Shift+M) to release Textual mouse reporting and select conversation text with normal left-drag behavior; use the terminal’s copy/paste shortcuts, commonly Ctrl+Shift+C / Ctrl+Shift+V or Shift+Insert. `/mouse interactive` restores widget clicks and scrolling, including permission and model-selector buttons.
+Text selection and clipboard behavior remain terminal-native. Native terminal selection is the default: drag across conversation text and use the terminal’s copy/paste shortcuts, commonly Ctrl+Shift+C / Ctrl+Shift+V or Shift+Insert. Use `/mouse interactive` when you need mouse clicks or scrolling on widgets such as permission/model buttons, then return with `/mouse select`; Ctrl+Shift+M toggles between both modes.
 
 ## SSH boundaries
 

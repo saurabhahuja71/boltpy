@@ -143,7 +143,7 @@ class BoltpyApp(App[None]):
     TITLE = "Boltpy"
     BINDINGS = [("ctrl+q", "quit", "Quit"), ("ctrl+c", "cancel_operation", "Cancel operation"), ("ctrl+shift+m", "toggle_mouse", "Toggle mouse mode")]
     def __init__(self, settings: Settings) -> None:
-        super().__init__(); self.settings = settings; self.busy = False; self.theme_name = "dark"; self.mouse_mode = "interactive"
+        super().__init__(); self.settings = settings; self.busy = False; self.theme_name = "dark"; self.mouse_mode = "select"
         self._permission_future: asyncio.Future[PermissionDecision] | None = None
         self._model_prompt: ModelPrompt | None = None
         self._tool_started: dict[str, float] = {}
@@ -163,6 +163,9 @@ class BoltpyApp(App[None]):
         yield Footer()
     def on_mount(self) -> None:
         self._apply_theme("dark")
+        # Native terminal selection is the default; switch to interactive mode
+        # explicitly when mouse-clicking widgets is needed.
+        self._set_mouse_mode("select")
         self.query_one("#prompt", PromptTextArea).focus(); self._set_status("Ready")
         self._write("[bold cyan]Boltpy[/bold cyan] — ready. Type /help for commands.")
     def _write(self, content: object) -> None:
@@ -230,7 +233,7 @@ class BoltpyApp(App[None]):
         if prompt == "/quit": self.exit()
         elif prompt == "/new": self.agent.reset(); self._write("[dim]Started a new conversation.[/dim]")
         elif prompt == "/help":
-            self._write("[bold]Commands[/bold]\n/help  show commands and controls\n/mode  inspect permission mode\n/mode ask|allow  change permission mode\n/theme dark|light  switch theme\n/model  choose the active configured model\n/permissions  list permanent approvals\n/permissions remove <command>  remove an exact approval\n/mouse select|interactive  native selection or widget mouse\n/new  start a new conversation\n/quit  exit\n\n[bold]Keys[/bold]\nEnter send · Shift+Enter newline · Ctrl+Q quit\nPermission: ←/→ or Tab select · Enter/Space confirm · Esc deny")
+            self._write("[bold]Commands[/bold]\n/help  show commands and controls\n/mode  inspect permission mode\n/mode ask|allow  change permission mode\n/theme dark|light  switch theme\n/model  choose the active configured model\n/permissions  list permanent approvals\n/permissions remove <command>  remove an exact approval\n/mouse select|interactive  native selection (default) or widget mouse\n/new  start a new conversation\n/quit  exit\n\n[bold]Keys[/bold]\nEnter send · Shift+Enter newline · Ctrl+Q quit\nPermission: ←/→ or Tab select · Enter/Space confirm · Esc deny")
         elif prompt == "/model":
             self.query_one(ModelPrompt).present(self.settings.available_models(), self.settings.model)
         elif prompt == "/permissions":
@@ -249,7 +252,7 @@ class BoltpyApp(App[None]):
             if mode not in {"ask", "allow"}: self._write("[bold red]Usage:[/bold red] /mode ask|allow")
             else: self.settings.permission_mode = mode; self.permissions.mode = PermissionMode(mode); self._set_status("Ready")
         elif prompt == "/theme": self._write(f"Current theme: {self.theme_name}")
-        elif prompt == "/mouse": self._write(f"Current mouse mode: {self.mouse_mode} (use /mouse select or /mouse interactive)")
+        elif prompt == "/mouse": self._write(f"Current mouse mode: {self.mouse_mode} (select is the default; use /mouse interactive for widget clicks)")
         elif prompt.startswith("/mouse "):
             mouse_mode = prompt.partition(" ")[2].strip().lower()
             if mouse_mode not in {"select", "interactive"}:
