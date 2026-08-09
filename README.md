@@ -49,7 +49,7 @@ Configure available model names with `models` or `BOLTPY_MODELS`, then use `/mod
 
 ## Terminal UI
 
-The TUI provides streaming Markdown with syntax-highlighted fenced code, tables, lists, links, compact tool cards, light/dark themes, natural scrolling, and inline permission controls. Useful commands:
+The TUI provides streaming Markdown with syntax-highlighted fenced code, tables, lists, links, compact tool cards, light/dark themes, natural scrolling, inline permission controls, and a visible `CWD:` line showing the current working folder. In native selection mode, drag across that path to copy it with your terminal. Useful commands:
 
 ```text
 /help

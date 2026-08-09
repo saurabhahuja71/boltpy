@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from pathlib import Path
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
@@ -158,6 +159,7 @@ class BoltpyApp(App[None]):
             yield Static("", id="streaming", markup=False)
             yield PermissionPrompt()
             yield ModelPrompt()
+            yield Static(f"CWD: {Path.cwd()}", id="cwd")
             yield Static("", id="status")
             yield PromptTextArea(placeholder="Ask Boltpy anything… (Enter to send, Shift+Enter for newline)", id="prompt")
         yield Footer()

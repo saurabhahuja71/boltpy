@@ -75,3 +75,12 @@ async def test_model_selector_changes_provider_model_and_supports_keyboard():
         assert app.settings.model == "second"
         assert app.agent.provider.model == "second"
         assert not selector.display
+
+
+@pytest.mark.asyncio
+async def test_current_working_directory_is_visible_and_copyable_line_exists():
+    from pathlib import Path
+    from textual.widgets import Static
+    app = BoltpyApp(Settings(api_key="test"))
+    async with app.run_test():
+        assert str(app.query_one("#cwd", Static).render()) == f"CWD: {Path.cwd()}"
