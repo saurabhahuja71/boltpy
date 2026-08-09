@@ -217,6 +217,30 @@ class BoltpyApp(App[None]):
         finally: prompt.dismiss(); self._permission_future = None
     def on_permission_prompt_decision(self, message: PermissionPrompt.Decision) -> None:
         if self._permission_future is not None and not self._permission_future.done(): self._permission_future.set_result(message.decision)
+    async def _available_models(self) -> list[str]:
+        """Return configured models plus locally installed Ollama models.
+
+        Discovery is best-effort and bounded so an unavailable Ollama daemon
+        never blocks the TUI or changes headless behavior.
+        """
+        models = self.settings.available_models()
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "ollama", "list",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=3)
+        except (OSError, asyncio.TimeoutError):
+            return models
+        if process.returncode != 0:
+            return models
+        for line in stdout.decode("utf-8", errors="replace").splitlines()[1:]:
+            name = line.split(None, 1)[0] if line.split() else ""
+            if name and name not in models:
+                models.append(name)
+        return models
+
     def on_model_prompt_decision(self, message: ModelPrompt.Decision) -> None:
         prompt = self.query_one(ModelPrompt)
         prompt.dismiss()
@@ -237,7 +261,7 @@ class BoltpyApp(App[None]):
         elif prompt == "/help":
             self._write("[bold]Commands[/bold]\n/help  show commands and controls\n/mode  inspect permission mode\n/mode ask|allow  change permission mode\n/theme dark|light  switch theme\n/model  choose the active configured model\n/permissions  list permanent approvals\n/permissions remove <command>  remove an exact approval\n/mouse select|interactive  native selection (default) or widget mouse\n/new  start a new conversation\n/quit  exit\n\n[bold]Keys[/bold]\nEnter send · Shift+Enter newline · Ctrl+Q quit\nPermission: ←/→ or Tab select · Enter/Space confirm · Esc deny")
         elif prompt == "/model":
-            self.query_one(ModelPrompt).present(self.settings.available_models(), self.settings.model)
+            self.query_one(ModelPrompt).present(await self._available_models(), self.settings.model)
         elif prompt == "/permissions":
             entries = self.permissions.permanent_entries()
             self._write("[bold]Permanent permissions[/bold]\n" + ("\n".join(f"✓ {section}: {scope}" for section, scope in entries) if entries else "(none)"))

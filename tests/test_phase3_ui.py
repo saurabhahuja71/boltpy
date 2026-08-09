@@ -84,3 +84,18 @@ async def test_current_working_directory_is_visible_and_copyable_line_exists():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test():
         assert str(app.query_one("#cwd", Static).render()) == f"CWD: {Path.cwd()}"
+
+
+@pytest.mark.asyncio
+async def test_model_selector_discovers_local_ollama_models(monkeypatch):
+    class Process:
+        returncode = 0
+        async def communicate(self):
+            return b"NAME ID SIZE MODIFIED\nqwen3-coder:30b abc 18 GB today\nveriloop-coder-e1:latest def 16 GB today\n", b""
+    async def fake_exec(*args, **kwargs):
+        assert args == ("ollama", "list")
+        return Process()
+    monkeypatch.setattr("boltpy.tui.app.asyncio.create_subprocess_exec", fake_exec)
+    app = BoltpyApp(Settings(api_key="test", model="configured"))
+    async with app.run_test():
+        assert await app._available_models() == ["configured", "qwen3-coder:30b", "veriloop-coder-e1:latest"]

@@ -45,7 +45,7 @@ Headless `exec` mode uses `allow` automatically, which makes it suitable for scr
 
 ## Model selection
 
-Configure available model names with `models` or `BOLTPY_MODELS`, then use `/model` in the TUI. The compact selector supports mouse selection, arrow keys, Enter to activate, and Escape to cancel. The active model is shown in the status bar and applies to subsequent requests without restarting Boltpy.
+Configure available model names with `models` or `BOLTPY_MODELS`, then use `/model` in the TUI. When the local `ollama` executable is available, Boltpy also discovers installed names from `ollama list` automatically. The compact selector supports mouse selection, arrow keys, Enter to activate, and Escape to cancel. The active model is shown in the status bar and applies to subsequent requests without restarting Boltpy.
 
 ## Terminal UI
 
