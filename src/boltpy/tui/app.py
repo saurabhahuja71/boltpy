@@ -47,6 +47,7 @@ class BoltpyApp(App[None]):
         yield Header(show_clock=True)
         with Container(id="main"):
             yield RichLog(id="transcript", wrap=True, markup=True, highlight=True)
+            yield Static("", id="streaming", markup=False)
             yield Static(f"Model: {self.settings.model} | Ready", id="status")
             yield PromptTextArea(placeholder="Ask Boltpy anything… (Enter to send, Shift+Enter for newline)", id="prompt")
         yield Footer()
@@ -76,16 +77,21 @@ class BoltpyApp(App[None]):
             await self._ask(prompt)
     async def _ask(self, prompt: str) -> None:
         transcript = self.query_one("#transcript", RichLog)
+        streaming = self.query_one("#streaming", Static)
         self.busy = True
         self._write(f"[bold green]You:[/bold green] {prompt}")
-        transcript.write("[bold magenta]Boltpy:[/bold magenta] ", end="")
+        answer_parts: list[str] = []
+        streaming.update("Boltpy: ")
         self._set_status("Thinking…")
         try:
             async for token in self.agent.stream(prompt):
-                transcript.write(token, end="")
-            transcript.write("")
+                answer_parts.append(token)
+                streaming.update(f"Boltpy: {''.join(answer_parts)}")
+            transcript.write(f"[bold magenta]Boltpy:[/bold magenta] {''.join(answer_parts)}")
+            streaming.update("")
             self._set_status("Ready")
         except Exception as error:
+            streaming.update("")
             self._write(f"[bold red]Error:[/bold red] {error}")
             self._set_status("Error — ready")
         finally:
