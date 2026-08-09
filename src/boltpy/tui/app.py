@@ -3,9 +3,35 @@ from __future__ import annotations
 from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Container
+from textual.message import Message
 from textual.widgets import Footer, Header, RichLog, Static, TextArea
 from boltpy.agent.core import Agent
 from boltpy.config import Settings
+
+
+class PromptTextArea(TextArea):
+    """Text area where Enter submits and Shift+Enter inserts a newline."""
+
+    class Submitted(Message):
+        """Message emitted when the user submits the prompt."""
+
+        def __init__(self, textarea: "PromptTextArea") -> None:
+            super().__init__()
+            self.text = textarea.text
+
+    async def _on_key(self, event: events.Key) -> None:
+        if event.key == "enter":
+            event.stop()
+            event.prevent_default()
+            self.post_message(self.Submitted(self))
+            return
+        if event.key == "shift+enter":
+            event.stop()
+            event.prevent_default()
+            self.insert("\n")
+            return
+        await super()._on_key(event)
+
 
 class BoltpyApp(App[None]):
     """Dark, keyboard-friendly streaming chat application."""
@@ -22,25 +48,23 @@ class BoltpyApp(App[None]):
         with Container(id="main"):
             yield RichLog(id="transcript", wrap=True, markup=True, highlight=True)
             yield Static(f"Model: {self.settings.model} | Ready", id="status")
-            yield TextArea(placeholder="Ask Boltpy anything… (Enter to send, Shift+Enter for newline)", id="prompt")
+            yield PromptTextArea(placeholder="Ask Boltpy anything… (Enter to send, Shift+Enter for newline)", id="prompt")
         yield Footer()
     def on_mount(self) -> None:
-        self.query_one("#prompt", TextArea).focus()
+        self.query_one("#prompt", PromptTextArea).focus()
         self._write("[bold cyan]Boltpy[/bold cyan] — ready. Type /help for commands.")
     def _write(self, text: str) -> None:
         self.query_one("#transcript", RichLog).write(text)
     def _set_status(self, text: str) -> None:
         self.query_one("#status", Static).update(f"Model: {self.settings.model} | {text}")
-    async def on_key(self, event: events.Key) -> None:
-        if event.key in {"enter", "ctrl+enter"} and isinstance(self.focused, TextArea):
-            event.stop()
-            await self._submit_prompt(self.focused.text)
+    async def on_prompt_text_area_submitted(self, event: PromptTextArea.Submitted) -> None:
+        await self._submit_prompt(event.text)
 
     async def _submit_prompt(self, value: str) -> None:
         if self.busy or not value.strip():
             return
         prompt = value.strip()
-        self.query_one("#prompt", TextArea).text = ""
+        self.query_one("#prompt", PromptTextArea).text = ""
         if prompt == "/quit":
             self.exit()
         elif prompt == "/new":
