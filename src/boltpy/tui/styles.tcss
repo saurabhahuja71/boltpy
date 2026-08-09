@@ -4,3 +4,17 @@ Screen { background: #101318; color: #e6edf3; }
 #streaming { height: auto; padding: 0 2; color: #d2a8ff; }
 #status { height: 1; color: #8b949e; padding: 0 1; }
 #prompt { height: 6; min-height: 3; max-height: 12; border: round #238636; background: #161b22; }
+
+#permission-prompt { display: none; width: 100%; height: auto; max-height: 12; padding: 1 2; margin: 0 1; border: round #d29922; background: #161b22; }
+#permission-content { width: 100%; height: auto; }
+#permission-title { height: 1; text-style: bold; color: #f2cc60; }
+#permission-tool { height: 1; padding-top: 1; text-style: bold; }
+#permission-details { height: auto; max-height: 5; padding: 1 1; color: #e6edf3; overflow-y: auto; }
+#permission-buttons { height: 3; width: 100%; layout: horizontal; align: left middle; }
+#permission-buttons Button { width: auto; min-width: 14; height: 3; margin: 0 1 0 0; border: tall transparent; text-style: bold; }
+#permission-buttons Button:hover { background: #3b4f68; color: #ffffff; border: tall #79c0ff; }
+#permission-buttons Button:focus { background: #1f6feb; color: #ffffff; border: tall #f2cc60; text-style: bold underline; }
+#permission-buttons #allow-once:focus { background: #238636; }
+#permission-buttons #allow-session:focus { background: #1f6feb; }
+#permission-buttons #deny:focus { background: #da3633; }
+#permission-help { height: 1; color: #8b949e; padding-top: 1; }

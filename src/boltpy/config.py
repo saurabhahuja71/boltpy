@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import tomllib
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 class Settings(BaseModel):
@@ -14,6 +14,7 @@ class Settings(BaseModel):
     base_url: str | None = None
     temperature: float = Field(default=0.2, ge=0, le=2)
     system_prompt: str = "You are Boltpy, a helpful terminal coding assistant."
+    permission_mode: Literal["ask", "allow"] = "ask"
 
 def _read_toml(path: Path) -> dict[str, Any]:
     if not path.is_file():
@@ -27,7 +28,7 @@ def load_settings() -> Settings:
     values: dict[str, Any] = {}
     values.update(_read_toml(Path.home() / ".config" / "boltpy" / "config.toml"))
     values.update(_read_toml(Path.cwd() / "boltpy.toml"))
-    for env_name, field_name in {"OPENAI_API_KEY": "api_key", "OPENAI_BASE_URL": "base_url", "OPENAI_MODEL": "model"}.items():
+    for env_name, field_name in {"OPENAI_API_KEY": "api_key", "OPENAI_BASE_URL": "base_url", "OPENAI_MODEL": "model", "BOLTPY_PERMISSION_MODE": "permission_mode"}.items():
         if value := os.getenv(env_name):
             values[field_name] = value
     return Settings(**values)
