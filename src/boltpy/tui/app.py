@@ -22,7 +22,7 @@ class BoltpyApp(App[None]):
         with Container(id="main"):
             yield RichLog(id="transcript", wrap=True, markup=True, highlight=True)
             yield Static(f"Model: {self.settings.model} | Ready", id="status")
-            yield TextArea(placeholder="Ask Boltpy anything… (Ctrl+Enter to send)", id="prompt")
+            yield TextArea(placeholder="Ask Boltpy anything… (Enter to send, Shift+Enter for newline)", id="prompt")
         yield Footer()
     def on_mount(self) -> None:
         self.query_one("#prompt", TextArea).focus()
@@ -32,7 +32,7 @@ class BoltpyApp(App[None]):
     def _set_status(self, text: str) -> None:
         self.query_one("#status", Static).update(f"Model: {self.settings.model} | {text}")
     async def on_key(self, event: events.Key) -> None:
-        if event.key == "ctrl+enter" and isinstance(self.focused, TextArea):
+        if event.key in {"enter", "ctrl+enter"} and isinstance(self.focused, TextArea):
             event.stop()
             await self._submit_prompt(self.focused.text)
 
