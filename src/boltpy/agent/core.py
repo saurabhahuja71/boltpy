@@ -64,7 +64,14 @@ class Agent:
                     yield AgentEvent(kind="tool_call", name=call.name, arguments=arguments, status="requested")
                 self.messages.append(assistant_call_message)
                 for call, arguments in parsed_calls:
-                    tool = self.registry.get(call.name)
+                    try:
+                        tool = self.registry.get(call.name)
+                        tool.validate(arguments)
+                    except Exception as error:
+                        result = ToolResult(ok=False, error=str(error))
+                        self.messages.append({"role": "tool", "tool_call_id": call.call_id, "content": result.as_message()})
+                        yield AgentEvent(kind="tool_result", name=call.name, result=result, status="failed")
+                        continue
                     request = tool.permission_request(arguments)
                     decision = PermissionDecision.ALLOW_ONCE
                     if request is not None:

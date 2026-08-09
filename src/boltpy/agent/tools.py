@@ -1,73 +1,113 @@
-"""Extensible, provider-independent local tools for Boltpy."""
+"""Extensible local and remote command tools for Boltpy."""
 from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from boltpy.agent.permissions import PermissionRequest
 
-ToolFunction = Callable[..., str | Awaitable[str]]
+ToolFunction = Callable[..., Any]
+ToolValidator = Callable[[dict[str, Any]], None]
 
 @dataclass(frozen=True)
 class ToolResult:
-    """Structured result passed to the model and UI."""
+    """Structured execution result shared by the model and UI."""
     ok: bool
     output: str = ""
     error: str = ""
+    exit_code: int | None = None
+    stdout: str = ""
+    stderr: str = ""
+    duration: float = 0.0
+    timed_out: bool = False
+    cancelled: bool = False
+
+    @property
+    def success(self) -> bool:
+        """Alias useful to callers that prefer a success field."""
+        return self.ok
+
     def as_message(self) -> str:
-        return self.output if self.ok else f"Tool error: {self.error}"
+        """Format enough structured detail for a later model turn."""
+        lines = [f"success: {self.ok}"]
+        if self.exit_code is not None: lines.append(f"exit_code: {self.exit_code}")
+        if self.duration: lines.append(f"duration: {self.duration:.2f}s")
+        if self.timed_out: lines.append("timed_out: true")
+        if self.cancelled: lines.append("cancelled: true")
+        if self.error: lines.append(f"error: {self.error}")
+        if self.stdout: lines.append(f"stdout:\n{self.stdout}")
+        if self.stderr: lines.append(f"stderr:\n{self.stderr}")
+        if not self.stdout and not self.stderr and self.output: lines.append(self.output)
+        return "\n".join(lines)
+
+    def display(self, limit: int = 700) -> str:
+        """Create a concise human-facing result without flooding the transcript."""
+        text = self.output or self.stdout or self.stderr or self.error or "(no output)"
+        if self.stdout and self.stderr: text = f"stdout:\n{self.stdout}\nstderr:\n{self.stderr}"
+        if len(text) > limit: text = text[: limit - 1] + "…"
+        return text
 
 @dataclass(frozen=True)
 class Tool:
-    """A named function, model schema, and optional permission capability."""
+    """A named function, provider schema, capability, and safety validator."""
     name: str
     description: str
     parameters: dict[str, Any]
     function: ToolFunction
     capability: str | None = None
+    validator: ToolValidator | None = None
     def schema(self) -> dict[str, Any]:
         return {"type": "function", "function": {"name": self.name, "description": self.description, "parameters": self.parameters}}
     def permission_request(self, arguments: dict[str, Any]) -> PermissionRequest | None:
-        if not self.capability:
-            return None
+        if not self.capability: return None
         return PermissionRequest(self.name, self.capability, arguments)
+    def validate(self, arguments: dict[str, Any]) -> None:
+        if self.validator: self.validator(arguments)
 
 class ToolRegistry:
-    """Registry used by both the headless and interactive agent."""
+    """Registry used by both headless and interactive agent execution."""
     def __init__(self) -> None:
         self._tools: dict[str, Tool] = {}
     def register(self, tool: Tool) -> None:
-        if tool.name in self._tools:
-            raise ValueError(f"Tool already registered: {tool.name}")
+        if tool.name in self._tools: raise ValueError(f"Tool already registered: {tool.name}")
         self._tools[tool.name] = tool
     def get(self, name: str) -> Tool:
-        try:
-            return self._tools[name]
-        except KeyError as error:
-            raise ValueError(f"Unknown tool: {name}") from error
-    def schemas(self) -> list[dict[str, Any]]:
-        return [tool.schema() for tool in self._tools.values()]
+        try: return self._tools[name]
+        except KeyError as error: raise ValueError(f"Unknown tool: {name}") from error
+    def schemas(self) -> list[dict[str, Any]]: return [tool.schema() for tool in self._tools.values()]
     async def execute(self, name: str, arguments: dict[str, Any]) -> ToolResult:
-        """Execute a registered function and normalize all expected failures."""
+        """Validate and execute a tool, normalizing failures into results."""
         try:
-            result = self.get(name).function(**arguments)
-            if asyncio.iscoroutine(result):
-                result = await result
-            return ToolResult(ok=True, output=str(result))
+            tool = self.get(name)
+            tool.validate(arguments)
+            result = tool.function(**arguments)
+            if asyncio.iscoroutine(result): result = await result
+            return result if isinstance(result, ToolResult) else ToolResult(ok=True, output=str(result))
         except Exception as error:
             return ToolResult(ok=False, error=str(error))
 
 _DANGEROUS_COMMANDS = (
-    r"(^|\s)rm\s+(-[a-zA-Z]*r[a-zA-Z]*\s+)?/($|\s)", r"(^|\s)rm\s+-rf\s+(/|\*|\.\.)",
-    r"(^|\s)(mkfs|fdisk|shutdown|reboot|poweroff)\b", r"(^|\s)dd\s+if=", r":\(\)\s*\{.*:\|:.*\};:",
+    r"(^|\s)rm\s+(-[a-zA-Z]*r[a-zA-Z]*\s+)?/($|\s)",
+    r"(^|\s)rm\s+-[a-zA-Z]*r[a-zA-Z]*\s+(/|\*|\.\.)",
+    r"(^|\s)(mkfs|fdisk|shutdown|reboot|poweroff)\b",
+    r"(^|\s)dd\s+if=",
+    r"(^|\s)find\s+/[^\n]*-delete\b",
+    r"(^|\s)chmod\s+(-R\s+)?[0-7]{3,4}\s+/$",
+    r":\(\)\s*\{.*:\|:.*\};:",
 )
-def _safe_shell_command(command: str) -> None:
-    if not command.strip(): raise ValueError("Shell command cannot be empty")
+
+def validate_shell_command(command: str) -> None:
+    """Reject empty or obviously catastrophic filesystem commands."""
+    if not isinstance(command, str) or not command.strip(): raise ValueError("Shell command cannot be empty")
     if any(re.search(pattern, command, re.IGNORECASE) for pattern in _DANGEROUS_COMMANDS):
         raise PermissionError("Blocked potentially destructive shell command")
+
+def _validate_timeout(value: float) -> None:
+    if value <= 0 or value > 300: raise ValueError("timeout must be greater than 0 and no more than 300 seconds")
 
 def read_file(path: str) -> str:
     """Read a UTF-8 text file."""
@@ -80,23 +120,66 @@ def list_dir(path: str = ".") -> str:
     except OSError as error: raise RuntimeError(f"Could not list {path!r}: {error}") from error
     return "\n".join(f"{item.name}{'/' if item.is_dir() else ''}" for item in entries) or "(empty directory)"
 
-async def run_shell(command: str) -> str:
-    """Run a shell command; authorization is handled by PermissionManager."""
-    _safe_shell_command(command)
-    process = await asyncio.create_subprocess_shell(command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
-    try: output, _ = await asyncio.wait_for(process.communicate(), timeout=30)
+async def _communicate(process: asyncio.subprocess.Process, timeout: float) -> tuple[bytes, bytes, bool]:
+    """Collect process output, terminating on timeout or task cancellation."""
+    try:
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        return stdout or b"", stderr or b"", False
     except asyncio.TimeoutError:
-        process.kill(); await process.wait(); raise RuntimeError("Shell command timed out after 30 seconds")
-    text = output.decode("utf-8", errors="replace").strip()
-    if process.returncode: raise RuntimeError(f"Command exited with status {process.returncode}:\n{text}")
-    return text or "(command completed with no output)"
+        process.terminate()
+        try: await asyncio.wait_for(process.wait(), timeout=2)
+        except asyncio.TimeoutError: process.kill(); await process.wait()
+        return b"", b"", True
+    except asyncio.CancelledError:
+        process.terminate()
+        try: await asyncio.wait_for(process.wait(), timeout=2)
+        except asyncio.TimeoutError: process.kill(); await process.wait()
+        raise
+
+async def run_shell(command: str, timeout: float = 30) -> ToolResult:
+    """Run a local shell command with separate output, timing, timeout, and cancellation."""
+    validate_shell_command(command); _validate_timeout(timeout); started = time.perf_counter()
+    process = await asyncio.create_subprocess_shell(command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    stdout, stderr, timed_out = await _communicate(process, timeout)
+    duration = time.perf_counter() - started
+    out = stdout.decode("utf-8", errors="replace").strip(); err = stderr.decode("utf-8", errors="replace").strip()
+    if timed_out: return ToolResult(False, error=f"Command timed out after {timeout:g} seconds", exit_code=process.returncode, stdout=out, stderr=err, duration=duration, timed_out=True)
+    return ToolResult(process.returncode == 0, output=out, exit_code=process.returncode, stdout=out, stderr=err, duration=duration, error=err if process.returncode else "")
+
+def _validate_ssh(arguments: dict[str, Any]) -> None:
+    host = arguments.get("host")
+    if not isinstance(host, str) or not host.strip(): raise ValueError("SSH host cannot be empty")
+    validate_shell_command(arguments.get("command", ""))
+    _validate_timeout(float(arguments.get("timeout", 30)))
+
+def _ssh_target(host: str, user: str | None) -> str:
+    if user and "@" in host: raise ValueError("Specify SSH user separately or as user@host, not both")
+    return f"{user}@{host}" if user else host
+
+async def ssh(host: str, command: str, user: str | None = None, port: int | None = None, timeout: float = 30) -> ToolResult:
+    """Run a non-interactive command using the system SSH client and SSH config."""
+    _validate_ssh({"host": host, "command": command, "timeout": timeout}); started = time.perf_counter()
+    args = ["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+    if port is not None:
+        if not 1 <= int(port) <= 65535: raise ValueError("SSH port must be between 1 and 65535")
+        args += ["-p", str(int(port))]
+    args += [_ssh_target(host, user), command]
+    process = await asyncio.create_subprocess_exec(*args, stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    stdout, stderr, timed_out = await _communicate(process, timeout)
+    duration = time.perf_counter() - started
+    out = stdout.decode("utf-8", errors="replace").strip(); err = stderr.decode("utf-8", errors="replace").strip()
+    if timed_out: return ToolResult(False, error=f"SSH command timed out after {timeout:g} seconds", exit_code=process.returncode, stdout=out, stderr=err, duration=duration, timed_out=True)
+    error = err if process.returncode else ""
+    if process.returncode and not error: error = f"ssh exited with status {process.returncode}"
+    return ToolResult(process.returncode == 0, output=out, exit_code=process.returncode, stdout=out, stderr=err, duration=duration, error=error)
 
 def default_registry() -> ToolRegistry:
     """Build the standard registry; callers may register more tools."""
     registry = ToolRegistry()
     registry.register(Tool("read_file", "Read a UTF-8 text file.", {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}, read_file))
     registry.register(Tool("list_dir", "List files and directories.", {"type": "object", "properties": {"path": {"type": "string", "default": "."}}}, list_dir))
-    registry.register(Tool("run_shell", "Run a shell command when permitted.", {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}, run_shell, capability="shell.execute"))
+    registry.register(Tool("run_shell", "Run a local shell command when permitted.", {"type": "object", "properties": {"command": {"type": "string"}, "timeout": {"type": "number", "default": 30}}, "required": ["command"]}, run_shell, capability="shell.execute", validator=lambda args: (validate_shell_command(args.get("command", "")), _validate_timeout(float(args.get("timeout", 30))))))
+    registry.register(Tool("ssh", "Run a non-interactive command on a remote host via system SSH.", {"type": "object", "properties": {"host": {"type": "string"}, "command": {"type": "string"}, "user": {"type": "string"}, "port": {"type": "integer"}, "timeout": {"type": "number", "default": 30}}, "required": ["host", "command"]}, ssh, capability="ssh.execute", validator=_validate_ssh))
     return registry
 
 def parse_arguments(raw: str) -> dict[str, Any]:

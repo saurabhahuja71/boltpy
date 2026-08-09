@@ -70,6 +70,8 @@ async def test_permission_screen_keyboard_focus_and_escape_denies():
         await pilot.press("tab")
         assert screen.query_one("#allow-session").has_focus
         await pilot.press("tab")
+        assert screen.query_one("#allow-permanent").has_focus
+        await pilot.press("tab")
         assert screen.query_one("#deny").has_focus
         await pilot.press("escape")
         await worker.wait()

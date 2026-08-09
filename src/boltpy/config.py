@@ -10,11 +10,16 @@ class Settings(BaseModel):
     """Runtime settings for OpenAI-compatible APIs."""
     model_config = ConfigDict(extra="ignore")
     model: str = "gpt-4o-mini"
+    models: list[str] = Field(default_factory=list)
     api_key: str | None = None
     base_url: str | None = None
     temperature: float = Field(default=0.2, ge=0, le=2)
     system_prompt: str = "You are Boltpy, a helpful terminal coding assistant."
     permission_mode: Literal["ask", "allow"] = "ask"
+
+    def available_models(self) -> list[str]:
+        """Return configured models with the active model first."""
+        return list(dict.fromkeys([self.model, *self.models]))
 
 def _read_toml(path: Path) -> dict[str, Any]:
     if not path.is_file():
@@ -28,9 +33,9 @@ def load_settings() -> Settings:
     values: dict[str, Any] = {}
     values.update(_read_toml(Path.home() / ".config" / "boltpy" / "config.toml"))
     values.update(_read_toml(Path.cwd() / "boltpy.toml"))
-    for env_name, field_name in {"OPENAI_API_KEY": "api_key", "OPENAI_BASE_URL": "base_url", "OPENAI_MODEL": "model", "BOLTPY_PERMISSION_MODE": "permission_mode"}.items():
+    for env_name, field_name in {"OPENAI_API_KEY": "api_key", "OPENAI_BASE_URL": "base_url", "OPENAI_MODEL": "model", "BOLTPY_PERMISSION_MODE": "permission_mode", "BOLTPY_MODELS": "models"}.items():
         if value := os.getenv(env_name):
-            values[field_name] = value
+            values[field_name] = [item.strip() for item in value.split(",") if item.strip()] if field_name == "models" else value
     return Settings(**values)
 
 def require_api_key(settings: Settings) -> str:
