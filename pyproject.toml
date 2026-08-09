@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "boltpy"
+version = "0.1.0"
+description = "A clean, modern terminal coding agent."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["httpx>=0.27", "openai>=1.50", "pydantic>=2.8", "textual>=0.80", "typer>=0.12"]
+
+[project.scripts]
+boltpy = "boltpy.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/boltpy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[dependency-groups]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]

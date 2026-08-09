@@ -1,0 +1,5 @@
+Screen { background: #101318; color: #e6edf3; }
+#main { height: 1fr; padding: 0 1; }
+#transcript { height: 1fr; border: round #30363d; background: #0d1117; padding: 1 2; }
+#status { height: 1; color: #8b949e; padding: 0 1; }
+#prompt { height: 6; min-height: 3; max-height: 12; border: round #238636; background: #161b22; }
