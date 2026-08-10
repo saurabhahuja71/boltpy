@@ -14,9 +14,13 @@ def main_command(ctx: typer.Context) -> None:
         from boltpy.tui.app import BoltpyApp
         BoltpyApp(load_settings()).run()
 
-def _run_prompt(prompt: str, *, allow_tools: bool, debug: bool) -> None:
+def _run_prompt(prompt: str, *, allow_tools: bool, debug: bool, model: str | None = None, provider: str | None = None) -> None:
     async def run() -> None:
         settings = load_settings()
+        if model:
+            settings = settings.model_copy(update={"model": model})
+        if provider:
+            settings = settings.model_copy(update={"provider": provider})
         if allow_tools: settings = settings.model_copy(update={"permission_mode": "allow"})
         agent = Agent(settings)
         try:
@@ -40,14 +44,20 @@ def _run_prompt(prompt: str, *, allow_tools: bool, debug: bool) -> None:
         raise typer.Exit(code=1) from error
 
 @app.command()
-def ask(prompt: str = typer.Argument(..., help="Question to ask the agent."), debug: bool = typer.Option(False, "--debug", help="Show tool and loop diagnostics on stderr.")) -> None:
+def ask(prompt: str = typer.Argument(..., help="Question to ask the agent."),
+        debug: bool = typer.Option(False, "--debug", help="Show tool and loop diagnostics on stderr."),
+        model: str | None = typer.Option(None, "--model", help="Override the configured model."),
+        provider: str | None = typer.Option(None, "--provider", help="Override the configured provider (e.g. openai, ollama).")) -> None:
     """Ask one question and stream the answer to stdout."""
-    _run_prompt(prompt, allow_tools=False, debug=debug)
+    _run_prompt(prompt, allow_tools=False, debug=debug, model=model, provider=provider)
 
 @app.command(name="exec")
-def exec_command(prompt: str = typer.Argument(..., help="Prompt to run headlessly with tools allowed."), debug: bool = typer.Option(False, "--debug", help="Show tool and loop diagnostics on stderr.")) -> None:
+def exec_command(prompt: str = typer.Argument(..., help="Prompt to run headlessly with tools allowed."),
+                 debug: bool = typer.Option(False, "--debug", help="Show tool and loop diagnostics on stderr."),
+                 model: str | None = typer.Option(None, "--model", help="Override the configured model."),
+                 provider: str | None = typer.Option(None, "--provider", help="Override the configured provider (e.g. openai, ollama).")) -> None:
     """Ask the agent headlessly; tools and SSH run in allow mode."""
-    _run_prompt(prompt, allow_tools=True, debug=debug)
+    _run_prompt(prompt, allow_tools=True, debug=debug, model=model, provider=provider)
 
 def run() -> None:
     app()

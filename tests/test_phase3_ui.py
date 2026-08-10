@@ -1,12 +1,12 @@
 """Focused Phase 3 presentation and theme regression tests."""
 from __future__ import annotations
 import pytest
-from rich.markdown import Markdown
+from textual.widgets import Markdown
 from boltpy.config import Settings
 from boltpy.tui.app import BoltpyApp, ConversationLog, ModelPrompt, PermissionPrompt, render_markdown
 
 
-def test_markdown_renderer_returns_rich_markdown_for_common_content():
+def test_markdown_renderer_returns_textual_markdown_for_common_content():
     content = """# Heading
 
 - **bold** and `inline code`
@@ -23,26 +23,24 @@ def hello():
 """
     rendered = render_markdown(content)
     assert isinstance(rendered, Markdown)
-    assert rendered.code_theme == "monokai"
 
 @pytest.mark.asyncio
 async def test_theme_command_switches_screen_immediately():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test():
-        assert app.mouse_mode == "select"
+        assert app.mouse_mode == "interactive"
+        assert app.theme_name == "dark"
         await app._submit_prompt("/theme light")
         assert app.theme_name == "light"
-        assert app.screen.has_class("light")
         await app._submit_prompt("/theme dark")
         assert app.theme_name == "dark"
-        assert not app.screen.has_class("light")
 
 @pytest.mark.asyncio
 async def test_help_documents_phase3_commands_and_controls():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test():
         await app._submit_prompt("/help")
-        assert app.query_one(ConversationLog).lines
+        assert app.query_one(ConversationLog).children
         assert app.query_one(PermissionPrompt).display is False
 
 @pytest.mark.asyncio
@@ -78,12 +76,14 @@ async def test_model_selector_changes_provider_model_and_supports_keyboard():
 
 
 @pytest.mark.asyncio
-async def test_current_working_directory_is_visible_and_copyable_line_exists():
+async def test_current_working_directory_is_visible_near_top_of_screen():
     from pathlib import Path
     from textual.widgets import Static
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test():
-        assert str(app.query_one("#cwd", Static).render()) == f"CWD: {Path.cwd()}"
+        cwd = app.query_one("#cwd", Static)
+        assert str(cwd.render()) == f"CWD: {Path.cwd()}"
+        assert cwd.region.y < app.query_one("#transcript").region.y
 
 
 @pytest.mark.asyncio

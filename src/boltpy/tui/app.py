@@ -4,29 +4,38 @@ import asyncio
 import json
 import time
 from pathlib import Path
-from rich.markdown import Markdown
-from rich.panel import Panel
 from rich.text import Text
 from textual import events, work
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.message import Message
-from textual.widgets import Button, Footer, Header, Label, OptionList, RichLog, Static, TextArea
+from textual.theme import Theme
+from textual.widget import Widget
+from textual.widgets import Button, Collapsible, Footer, Header, Label, Markdown, OptionList, Static, TextArea
 from textual.widgets.option_list import Option
 from boltpy.agent.core import Agent
 from boltpy.agent.permissions import PermissionDecision, PermissionManager, PermissionMode, PermissionRequest
+from boltpy.agent.todos import todo_store
 from boltpy.config import Settings
+
+_TODO_TOOLS = {"add_todo", "complete_todo", "update_todo", "list_todos"}
 
 
 def render_markdown(text: str) -> Markdown:
-    """Render assistant content with Rich Markdown and fenced-code highlighting."""
-    return Markdown(text, code_theme="monokai", hyperlinks=True)
+    """Create a streaming-friendly Textual Markdown widget for assistant content."""
+    return Markdown(text)
 
 
-class ConversationLog(RichLog):
-    """Conversation log that stops forcing scroll when the user reads older content."""
-    def on_scroll(self, event: object) -> None:
-        self.auto_scroll = self.scroll_y >= self.max_scroll_y
+class ConversationLog(VerticalScroll):
+    """Conversation area that stops auto-scrolling when the user reads older content."""
+    def on_scroll(self, event: events.Scroll) -> None:
+        self._pinned = self.scroll_y < self.max_scroll_y
+
+    def log(self, widget: Widget) -> None:
+        """Mount a widget and scroll to the end unless the user is reading above."""
+        self.mount(widget)
+        if not getattr(self, "_pinned", False):
+            self.call_after_refresh(lambda: self.scroll_end(animate=False))
 
 
 class PromptTextArea(TextArea):
@@ -39,6 +48,17 @@ class PromptTextArea(TextArea):
             event.stop(); event.prevent_default(); self.post_message(self.Submitted(self)); return
         if event.key == "shift+enter":
             event.stop(); event.prevent_default(); self.insert("\n"); return
+        await super()._on_key(event)
+
+
+class CustomAnswerInput(TextArea):
+    """One-line input used by the options picker for a typed answer."""
+    class Submitted(Message):
+        def __init__(self, textarea: "CustomAnswerInput") -> None:
+            super().__init__(); self.text = textarea.text
+    async def _on_key(self, event: events.Key) -> None:
+        if event.key == "enter":
+            event.stop(); event.prevent_default(); self.post_message(self.Submitted(self)); return
         await super()._on_key(event)
 
 
@@ -138,42 +158,169 @@ class ModelPrompt(Static):
             self.post_message(self.Decision(self, str(event.option.id)))
 
 
+class OptionsPrompt(Static):
+    """Numbered options picker with keyboard, mouse, and a typed answer."""
+    class Decision(Message):
+        def __init__(self, prompt: "OptionsPrompt", choice: str | None) -> None:
+            super().__init__(); self.prompt = prompt; self.choice = choice
+
+    def __init__(self) -> None:
+        super().__init__(id="options-prompt"); self._options: list[str] = []; self._allow_custom = True
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="options-content"):
+            yield Label("", id="options-title")
+            yield OptionList(id="options-list")
+            yield CustomAnswerInput(placeholder="Type your own answer… Enter to submit", id="options-custom")
+            yield Label("↑/↓ Select · Enter Confirm · Esc Cancel", id="options-help")
+
+    def present(self, title: str, options: list[str], allow_custom: bool = True) -> None:
+        self._options = options; self._allow_custom = allow_custom
+        self.query_one("#options-title", Label).update(title or "Choose an option")
+        picker = self.query_one("#options-list", OptionList)
+        picker.clear_options()
+        for index, option in enumerate(options):
+            picker.add_option(Option(f"{index + 1}. {option}", id=f"option-{index}"))
+        if allow_custom:
+            picker.add_option(Option("0. Type your own answer", id="option-custom"))
+        picker.highlighted = 0
+        self.display = True
+        picker.focus()
+
+    def dismiss(self) -> None:
+        self.display = False
+        custom = self.query_one("#options-custom", CustomAnswerInput)
+        custom.styles.display = "none"; custom.text = ""
+
+    def on_key(self, event: events.Key) -> None:
+        if not self.display:
+            return
+        if event.key == "escape":
+            event.stop(); self.post_message(self.Decision(self, None))
+        elif event.key in {"1", "2", "3", "4", "5", "6", "7", "8", "9"}:
+            index = int(event.key) - 1
+            if index < len(self._options):
+                event.stop(); self.post_message(self.Decision(self, self._options[index]))
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        event.stop()
+        if event.option.id == "option-custom":
+            custom = self.query_one("#options-custom", CustomAnswerInput)
+            custom.styles.display = "block"
+            custom.focus()
+            return
+        index = int(str(event.option.id).removeprefix("option-"))
+        if 0 <= index < len(self._options):
+            self.post_message(self.Decision(self, self._options[index]))
+
+    def on_custom_answer_input_submitted(self, event: CustomAnswerInput.Submitted) -> None:
+        if self.display:
+            self.post_message(self.Decision(self, event.text.strip() or None))
+
+
+class TodoPanel(Static):
+    """Live todo side panel bound to the shared agent todo store."""
+    def __init__(self) -> None:
+        super().__init__(id="todo-panel", markup=False)
+
+    def refresh_todos(self) -> None:
+        todos = todo_store.items()
+        open_count = todo_store.open_count()
+        text = Text()
+        text.append(f"Todos ({open_count} open)\n", style="bold")
+        if not todos:
+            text.append("(none)")
+        for todo in todos:
+            mark = "[x]" if todo.completed else "[ ]"
+            style = "dim" if todo.completed else ""
+            text.append(f"{mark} {todo.id}. {todo.description}\n", style=style)
+        self.update(text)
+
+
 class BoltpyApp(App[None]):
-    """Streaming chat application with Markdown, themes, and inline approval."""
+    """Streaming chat application with Markdown, themes, tools, and inline approval."""
     CSS_PATH = "styles.tcss"
     TITLE = "Boltpy"
-    BINDINGS = [("ctrl+q", "quit", "Quit"), ("ctrl+c", "cancel_operation", "Cancel operation"), ("ctrl+shift+m", "toggle_mouse", "Toggle mouse mode")]
+    BINDINGS = [
+        ("ctrl+q", "quit", "Quit"),
+        ("ctrl+c", "cancel_operation", "Cancel operation"),
+        ("ctrl+shift+m", "toggle_mouse", "Toggle mouse mode"),
+        ("ctrl+t", "toggle_todo", "Toggle todos"),
+    ]
+
     def __init__(self, settings: Settings) -> None:
-        super().__init__(); self.settings = settings; self.busy = False; self.theme_name = "dark"; self.mouse_mode = "select"
+        super().__init__(); self.settings = settings; self.busy = False; self.theme_name = "dark"; self.mouse_mode = "interactive"
         self._permission_future: asyncio.Future[PermissionDecision] | None = None
+        self._options_future: asyncio.Future[str] | None = None
         self._model_prompt: ModelPrompt | None = None
         self._tool_started: dict[str, float] = {}
         self._tool_arguments: dict[str, dict[str, object]] = {}
+        self._tool_card_status: dict[str, Static] = {}
+        self._tool_card_result: dict[str, Static] = {}
+        self._tool_card: dict[str, Collapsible] = {}
         self._active_worker = None
+        self.register_theme(Theme(
+            "dark", primary="#58a6ff", secondary="#79c0ff", warning="#d29922", error="#f85149",
+            success="#3fb950", accent="#58a6ff", foreground="#e6edf3", background="#101318",
+            surface="#0d1117", panel="#161b22"))
+        self.register_theme(Theme(
+            "light", primary="#0969da", secondary="#1f6feb", warning="#9a6700", error="#cf222e",
+            success="#1a7f37", accent="#0969da", foreground="#24292f", background="#ffffff",
+            surface="#f6f8fa", panel="#ffffff"))
         self.permissions = PermissionManager(mode=PermissionMode(settings.permission_mode), handler=self._request_permission)
         self.agent = Agent(settings, permissions=self.permissions)
+        self.agent.options_handler = self._request_options
+
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Container(id="main"):
-            yield ConversationLog(id="transcript", wrap=True, markup=True, highlight=True, auto_scroll=True)
-            yield Static("", id="streaming", markup=False)
+            yield Static(f"CWD: {Path.cwd()}", id="cwd")
+            with Horizontal(id="content"):
+                yield ConversationLog(id="transcript")
+                yield TodoPanel()
+            yield Markdown("", id="streaming")
             yield PermissionPrompt()
             yield ModelPrompt()
-            yield Static(f"CWD: {Path.cwd()}", id="cwd")
+            yield OptionsPrompt()
             yield Static("", id="status")
             yield PromptTextArea(placeholder="Ask Boltpy anything… (Enter to send, Shift+Enter for newline)", id="prompt")
         yield Footer()
+
     def on_mount(self) -> None:
-        self._apply_theme("dark")
-        # Native terminal selection is the default; switch to interactive mode
-        # explicitly when mouse-clicking widgets is needed.
-        self._set_mouse_mode("select")
+        self._apply_theme(self.settings.theme if self.settings.theme in {"dark", "light"} else "dark")
+        # Widget interaction is the default; switch to native terminal selection
+        # explicitly when dragging to select/copy text is needed.
+        self._set_mouse_mode("interactive")
+        self.query_one(TodoPanel).refresh_todos()
         self.query_one("#prompt", PromptTextArea).focus(); self._set_status("Ready")
-        self._write("[bold cyan]Boltpy[/bold cyan] — ready. Type /help for commands.")
-    def _write(self, content: object) -> None:
-        self.query_one("#transcript", ConversationLog).write(content)
+        self._write("[bold cyan]Boltpy[/bold cyan] — ready. Type /help for commands.", markup=True)
+
+    def _write(self, content: object, markup: bool = False) -> None:
+        if isinstance(content, Widget):
+            widget = content
+        else:
+            text = str(content)
+            widget = Static(Text.from_markup(text) if markup else Text(text), classes="system-message")
+        self.query_one("#transcript", ConversationLog).log(widget)
+
+    def _user_message(self, text: str) -> Static:
+        message = Text("You: ", style="bold green")
+        message.append(text)
+        return Static(message, classes="system-message")
+
+    def _assistant_block(self, text: str) -> Vertical:
+        return Vertical(
+            Static("Boltpy", classes="message-title"),
+            Markdown(text),
+            classes="assistant-block",
+        )
+
     def _set_status(self, text: str) -> None:
-        self.query_one("#status", Static).update(f"Boltpy | Mode: {self.permissions.mode.upper()} | Model: {self.settings.model} | Mouse: {self.mouse_mode} | {text}")
+        provider = getattr(getattr(self.agent, "provider", None), "provider_name", "openai")
+        tokens = getattr(getattr(self.agent, "provider", None), "total_tokens", 0)
+        self.query_one("#status", Static).update(
+            f"Boltpy | Mode: {self.permissions.mode.upper()} | Model: {provider}/{self.settings.model} | Tokens: {tokens} | {text}")
+
     def _set_mouse_mode(self, mode: str) -> None:
         """Toggle terminal mouse reporting for native selection or widget interaction."""
         driver = getattr(self, "_driver", None)
@@ -181,6 +328,11 @@ class BoltpyApp(App[None]):
         if method is not None:
             method()
         self.mouse_mode = mode
+
+    def _apply_theme(self, theme: str) -> None:
+        if theme in {"dark", "light"}:
+            self.theme = theme
+            self.theme_name = theme
 
     def action_cancel_operation(self) -> None:
         """Cancel the active model or tool worker."""
@@ -192,22 +344,55 @@ class BoltpyApp(App[None]):
         self._set_mouse_mode("select" if self.mouse_mode == "interactive" else "interactive")
         self._set_status("Ready")
 
-    def _apply_theme(self, theme: str) -> None:
-        self.screen.remove_class("light")
-        if theme == "light": self.screen.add_class("light")
-        self.theme_name = theme
+    def action_toggle_todo(self) -> None:
+        panel = self.query_one(TodoPanel)
+        panel.display = not panel.display
+        self._set_status("Ready")
+
     def _tool_text(self, name: str, arguments: dict[str, object]) -> str:
         if name == "run_shell": return f"$ {arguments.get('command', '')}"
         if name == "ssh": return f"{arguments.get('user', '') + '@' if arguments.get('user') else ''}{arguments.get('host', '')}: {arguments.get('command', '')}"
+        if name == "http_request": return f"{arguments.get('method', 'GET')} {arguments.get('url', '')}"
         return json.dumps(arguments, ensure_ascii=False, separators=(", ", ": "))
-    def _write_tool_card(self, name: str, arguments: dict[str, object], status: str, result: str = "") -> None:
+
+    def _status_style(self, status: str) -> str:
+        if status in {"✓ completed", "approved"} or status.startswith("approved"):
+            return "success"
+        if "waiting" in status or status == "requested" or status == "running…":
+            return "warning"
+        return "error"
+
+    def _add_tool_card(self, name: str, arguments: dict[str, object], status: str) -> None:
         elapsed = time.perf_counter() - self._tool_started.get(name, time.perf_counter())
-        body = Text(self._tool_text(name, arguments) + "\n", style="bold")
-        body.append(f"{status} · {elapsed:.2f}s", style="green" if status in {"✓ completed", "approved"} else "yellow" if "waiting" in status or status == "requested" else "red")
+        status_widget = Static(f"{status} · {elapsed:.2f}s", classes=f"tool-status tool-status-{self._status_style(status)}")
+        result_widget = Static("", classes="tool-result")
+        body = Vertical(
+            Static(self._tool_text(name, arguments), classes="tool-args"),
+            status_widget,
+            result_widget,
+            classes="tool-card",
+        )
+        card = Collapsible(body, title=f"Tool: {name} — {status} · {elapsed:.2f}s", collapsed=True)
+        self._tool_card[name] = card
+        self._tool_card_status[name] = status_widget
+        self._tool_card_result[name] = result_widget
+        self._write(card)
+
+    def _update_tool_card(self, name: str, status: str, result: str = "") -> None:
+        status_widget = self._tool_card_status.get(name)
+        if status_widget is None:
+            self._add_tool_card(name, self._tool_arguments.get(name, {}), status)
+            status_widget = self._tool_card_status[name]
+        elapsed = time.perf_counter() - self._tool_started.get(name, time.perf_counter())
+        status_widget.update(f"{status} · {elapsed:.2f}s")
+        status_widget.set_classes(f"tool-status tool-status-{self._status_style(status)}")
+        card = self._tool_card.get(name)
+        if card is not None:
+            card.title = f"Tool: {name} — {status} · {elapsed:.2f}s"
         if result:
             summary = result if len(result) <= 700 else result[:697] + "…"
-            body.append("\n" + summary)
-        self._write(Panel(body, title=f"Tool: {name}", border_style="cyan", padding=(0, 1)))
+            self._tool_card_result.get(name, Static("")).update(summary)
+
     async def _request_permission(self, request: PermissionRequest) -> PermissionDecision:
         """Await an inline widget decision without blocking Textual's UI."""
         if self._permission_future is not None and not self._permission_future.done(): return PermissionDecision.DENY
@@ -215,8 +400,23 @@ class BoltpyApp(App[None]):
         self._permission_future = future; prompt = self.query_one(PermissionPrompt); prompt.present(request)
         try: return await future
         finally: prompt.dismiss(); self._permission_future = None
+
     def on_permission_prompt_decision(self, message: PermissionPrompt.Decision) -> None:
         if self._permission_future is not None and not self._permission_future.done(): self._permission_future.set_result(message.decision)
+
+    async def _request_options(self, title: str, options: list[str], allow_custom: bool) -> str:
+        """Show the options picker and await the user's choice."""
+        if self._options_future is not None and not self._options_future.done():
+            return options[0] if options else "(cancelled)"
+        future: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+        self._options_future = future; prompt = self.query_one(OptionsPrompt); prompt.present(title, options, allow_custom)
+        try: return await future
+        finally: prompt.dismiss(); self._options_future = None
+
+    def on_options_prompt_decision(self, message: OptionsPrompt.Decision) -> None:
+        if self._options_future is not None and not self._options_future.done():
+            self._options_future.set_result(message.choice if message.choice is not None else "(cancelled)")
+
     async def _available_models(self) -> list[str]:
         """Return configured models plus locally installed Ollama models.
 
@@ -248,23 +448,26 @@ class BoltpyApp(App[None]):
             self.settings.model = message.model
             if hasattr(self.agent.provider, "model"):
                 self.agent.provider.model = message.model
-            self._write(f"Active model: [bold]{message.model}[/bold]")
+            self._write(f"Active model: [bold]{message.model}[/bold]", markup=True)
             self._set_status("Ready")
         self.query_one("#prompt", PromptTextArea).focus()
 
     async def on_prompt_text_area_submitted(self, event: PromptTextArea.Submitted) -> None: await self._submit_prompt(event.text)
+
     async def _submit_prompt(self, value: str) -> None:
         if self.busy or not value.strip(): return
         prompt = value.strip(); self.query_one("#prompt", PromptTextArea).text = ""
         if prompt == "/quit": self.exit()
-        elif prompt == "/new": self.agent.reset(); self._write("[dim]Started a new conversation.[/dim]")
+        elif prompt == "/new": self.agent.reset(); self._write("[dim]Started a new conversation.[/dim]", markup=True)
         elif prompt == "/help":
-            self._write("[bold]Commands[/bold]\n/help  show commands and controls\n/mode  inspect permission mode\n/mode ask|allow  change permission mode\n/theme dark|light  switch theme\n/model  choose the active configured model\n/permissions  list permanent approvals\n/permissions remove <command>  remove an exact approval\n/mouse select|interactive  native selection (default) or widget mouse\n/new  start a new conversation\n/quit  exit\n\n[bold]Keys[/bold]\nEnter send · Shift+Enter newline · Ctrl+Q quit\nPermission: ←/→ or Tab select · Enter/Space confirm · Esc deny")
+            self._write("[bold]Commands[/bold]\n/help  show commands and controls\n/mode  inspect permission mode\n/mode ask|allow|plan  change permission mode\n/theme dark|light  switch theme\n/model  choose the active configured model\n/todo  toggle the todo panel\n/permissions  list permanent approvals\n/permissions remove <command>  remove an exact approval\n/mouse interactive|select  widget mouse (default) or native selection\n/new  start a new conversation\n/quit  exit\n\n[bold]Keys[/bold]\nEnter send · Shift+Enter newline · Ctrl+Q quit · Ctrl+T todos\nPermission: ←/→ or Tab select · Enter/Space confirm · Esc deny", markup=True)
         elif prompt == "/model":
             self.query_one(ModelPrompt).present(await self._available_models(), self.settings.model)
+        elif prompt == "/todo":
+            self.action_toggle_todo()
         elif prompt == "/permissions":
             entries = self.permissions.permanent_entries()
-            self._write("[bold]Permanent permissions[/bold]\n" + ("\n".join(f"✓ {section}: {scope}" for section, scope in entries) if entries else "(none)"))
+            self._write("[bold]Permanent permissions[/bold]\n" + ("\n".join(f"✓ {section}: {scope}" for section, scope in entries) if entries else "(none)"), markup=True)
         elif prompt.startswith("/permissions remove "):
             target = prompt.partition(" ")[2].partition(" ")[2].strip().strip("\"")
             removed = False
@@ -275,47 +478,52 @@ class BoltpyApp(App[None]):
         elif prompt == "/mode": self._write(f"Current permission mode: {self.permissions.mode.value}")
         elif prompt.startswith("/mode "):
             mode = prompt.partition(" ")[2].strip()
-            if mode not in {"ask", "allow"}: self._write("[bold red]Usage:[/bold red] /mode ask|allow")
-            else: self.settings.permission_mode = mode; self.permissions.mode = PermissionMode(mode); self._set_status("Ready")
+            if mode not in {"ask", "allow", "plan"}: self._write("[bold red]Usage:[/bold red] /mode ask|allow|plan", markup=True)
+            else: self.agent.set_permission_mode(PermissionMode(mode)); self._set_status("Ready")
         elif prompt == "/theme": self._write(f"Current theme: {self.theme_name}")
-        elif prompt == "/mouse": self._write(f"Current mouse mode: {self.mouse_mode} (select is the default; use /mouse interactive for widget clicks)")
+        elif prompt == "/mouse": self._write(f"Current mouse mode: {self.mouse_mode} (interactive is the default; use /mouse select for native selection)")
         elif prompt.startswith("/mouse "):
             mouse_mode = prompt.partition(" ")[2].strip().lower()
             if mouse_mode not in {"select", "interactive"}:
-                self._write("[bold red]Usage:[/bold red] /mouse select|interactive")
+                self._write("[bold red]Usage:[/bold red] /mouse select|interactive", markup=True)
             else:
                 self._set_mouse_mode(mouse_mode); self._set_status("Ready")
 
         elif prompt.startswith("/theme "):
             theme = prompt.partition(" ")[2].strip().lower()
-            if theme not in {"dark", "light"}: self._write("[bold red]Usage:[/bold red] /theme dark|light")
+            if theme not in {"dark", "light"}: self._write("[bold red]Usage:[/bold red] /theme dark|light", markup=True)
             else: self._apply_theme(theme); self._set_status("Ready")
         else: self._active_worker = self._ask(prompt)
+
     @work(exclusive=True)
     async def _ask(self, prompt: str) -> None:
-        transcript = self.query_one("#transcript", ConversationLog); streaming = self.query_one("#streaming", Static)
-        self.busy = True; self._write(f"[bold green]You:[/bold green] {prompt}"); answer_parts: list[str] = []
-        streaming.update("Boltpy: "); self._set_status("Thinking…")
+        transcript = self.query_one("#transcript", ConversationLog); streaming = self.query_one("#streaming", Markdown)
+        self.busy = True; self._write(self._user_message(prompt)); answer_parts: list[str] = []
+        streaming.update(""); self._set_status("Thinking…")
         try:
             async for event in self.agent.stream_events(prompt):
                 if event.kind == "text":
-                    answer_parts.append(event.text); streaming.update(render_markdown("".join(answer_parts)))
+                    answer_parts.append(event.text); streaming.update("".join(answer_parts))
                 elif event.kind == "tool_call":
-                    self._tool_started[event.name] = time.perf_counter(); self._tool_arguments[event.name] = event.arguments or {}; self._write_tool_card(event.name, event.arguments or {}, "requested")
+                    self._tool_started[event.name] = time.perf_counter(); self._tool_arguments[event.name] = event.arguments or {}
+                    self._add_tool_card(event.name, event.arguments or {}, "running…")
                 elif event.kind == "permission" and event.status == "waiting":
-                    self._write_tool_card(event.name, event.arguments or {}, "waiting for permission"); self._set_status(f"Waiting for {event.name} approval…")
+                    self._update_tool_card(event.name, "waiting for permission"); self._set_status(f"Waiting for {event.name} approval…")
                 elif event.kind == "permission" and event.status != "waiting":
-                    self._write_tool_card(event.name, event.arguments or {}, "approved" if event.status in {"allow_once", "allow_session", "allow_permanent"} else "denied")
+                    self._update_tool_card(event.name, "approved" if event.status in {"allow_once", "allow_session", "allow_permanent"} else "denied")
                 elif event.kind == "tool_result":
                     result = event.result; summary = result.display() if result else "unknown error"
-                    self._write_tool_card(event.name, self._tool_arguments.get(event.name, {}), "✓ completed" if result and result.ok else "✗ failed", summary)
-            if answer_parts: transcript.write(Panel(render_markdown("".join(answer_parts)), title="Boltpy", border_style="magenta", padding=(0, 1)))
+                    if event.name in _TODO_TOOLS:
+                        self.query_one(TodoPanel).refresh_todos()
+                    self._update_tool_card(event.name, "✓ completed" if result and result.ok else "✗ failed", summary)
+            if answer_parts: transcript.log(self._assistant_block("".join(answer_parts)))
             streaming.update(""); self._set_status("Ready")
         except asyncio.CancelledError:
-            streaming.update(""); self._write("[yellow]Operation cancelled.[/yellow]"); self._set_status("Cancelled — ready")
+            streaming.update(""); self._write("[yellow]Operation cancelled.[/yellow]", markup=True); self._set_status("Cancelled — ready")
         except Exception as error:
-            streaming.update(""); self._write(Panel(Text(str(error), style="red"), title="✗ Model error", border_style="red")); self._set_status("Error — ready")
+            streaming.update(""); self._write(Static(Text(str(error), style="red"), classes="system-message")); self._set_status("Error — ready")
         finally:
             self.busy = False
             self._active_worker = None
+
     async def on_unmount(self) -> None: await self.agent.close()

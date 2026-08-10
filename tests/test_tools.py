@@ -44,7 +44,7 @@ async def test_shell_blocks_destructive_command():
 
 def test_default_registry_has_expected_schemas():
     names = [schema["function"]["name"] for schema in default_registry().schemas()]
-    assert names == ["read_file", "list_dir", "run_shell", "ssh"]
+    assert names == ["read_file", "list_dir", "run_shell", "ssh", "http_request", "present_options", "add_todo", "complete_todo", "update_todo", "list_todos"]
 
 @pytest.mark.asyncio
 async def test_allow_session_grant_is_reused_by_capability():

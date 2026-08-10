@@ -8,7 +8,9 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import httpx
 from boltpy.agent.permissions import PermissionRequest
+from boltpy.agent.todos import todo_store
 
 ToolFunction = Callable[..., Any]
 ToolValidator = Callable[[dict[str, Any]], None]
@@ -173,6 +175,70 @@ async def ssh(host: str, command: str, user: str | None = None, port: int | None
     if process.returncode and not error: error = f"ssh exited with status {process.returncode}"
     return ToolResult(process.returncode == 0, output=out, exit_code=process.returncode, stdout=out, stderr=err, duration=duration, error=error)
 
+def _validate_http(arguments: dict[str, Any]) -> None:
+    url = arguments.get("url")
+    if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+        raise ValueError("url must be a valid http(s) URL")
+    _validate_timeout(float(arguments.get("timeout", 30)))
+
+async def http_request(method: str = "GET", url: str = "", headers: dict[str, str] | None = None,
+                       body: Any = None, timeout: float = 30) -> ToolResult:
+    """Perform an HTTP(S) request with a bounded timeout and clear errors."""
+    _validate_http({"url": url, "timeout": timeout})
+    method = (method or "GET").upper()
+    if method not in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}:
+        raise ValueError(f"Unsupported HTTP method: {method}")
+    if headers is not None and not isinstance(headers, dict):
+        raise ValueError("headers must be an object of key/value pairs")
+    request_kwargs: dict[str, Any] = {"headers": headers}
+    if isinstance(body, str):
+        request_kwargs["content"] = body
+    elif body is not None:
+        request_kwargs["json"] = body
+    started = time.perf_counter()
+    try:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            response = await client.request(method, url, **request_kwargs)
+    except httpx.TimeoutException:
+        return ToolResult(False, error=f"HTTP request timed out after {timeout:g} seconds", timed_out=True)
+    except httpx.RequestError as error:
+        return ToolResult(False, error=f"HTTP request failed: {error}")
+    duration = time.perf_counter() - started
+    text = response.text
+    if len(text) > 20000:
+        text = text[:19997] + "\n…[truncated]"
+    ok = 200 <= response.status_code < 400
+    return ToolResult(ok, output=f"{response.status_code} {method} {url}\n\n{text}",
+                      error="" if ok else f"HTTP {response.status_code}",
+                      exit_code=response.status_code, duration=duration)
+
+def add_todo(description: str) -> str:
+    """Add a todo item."""
+    if not isinstance(description, str) or not description.strip():
+        raise ValueError("Todo description cannot be empty")
+    todo = todo_store.add(description)
+    return f"added todo {todo.id}: {todo.description}"
+
+def complete_todo(todo_id: str) -> str:
+    """Mark a todo item as completed."""
+    if not todo_store.complete(str(todo_id)):
+        raise ValueError(f"No todo with id {todo_id!r}")
+    return f"completed todo {todo_id}"
+
+def update_todo(todo_id: str, description: str) -> str:
+    """Update a todo item description."""
+    if not todo_store.update(str(todo_id), description):
+        raise ValueError(f"No todo with id {todo_id!r} or empty description")
+    return f"updated todo {todo_id}"
+
+def list_todos() -> str:
+    """List the current todo items."""
+    return todo_store.summary()
+
+def _present_options_placeholder(title: str, options: list[str], allow_custom: bool = True) -> ToolResult:
+    """Fallback used when no interactive options handler is wired up."""
+    return ToolResult(ok=False, error="present_options requires an interactive UI; not available here")
+
 def default_registry() -> ToolRegistry:
     """Build the standard registry; callers may register more tools."""
     registry = ToolRegistry()
@@ -180,6 +246,12 @@ def default_registry() -> ToolRegistry:
     registry.register(Tool("list_dir", "List files and directories.", {"type": "object", "properties": {"path": {"type": "string", "default": "."}}}, list_dir))
     registry.register(Tool("run_shell", "Run a local shell command when permitted.", {"type": "object", "properties": {"command": {"type": "string"}, "timeout": {"type": "number", "default": 30}}, "required": ["command"]}, run_shell, capability="shell.execute", validator=lambda args: (validate_shell_command(args.get("command", "")), _validate_timeout(float(args.get("timeout", 30))))))
     registry.register(Tool("ssh", "Run a non-interactive command on a remote host via system SSH.", {"type": "object", "properties": {"host": {"type": "string"}, "command": {"type": "string"}, "user": {"type": "string"}, "port": {"type": "integer"}, "timeout": {"type": "number", "default": 30}}, "required": ["host", "command"]}, ssh, capability="ssh.execute", validator=_validate_ssh))
+    registry.register(Tool("http_request", "Perform an HTTP(S) request and return the response body. Useful for web APIs such as GitLab.", {"type": "object", "properties": {"method": {"type": "string", "default": "GET"}, "url": {"type": "string"}, "headers": {"type": "object"}, "body": {"type": ["string", "object"]}, "timeout": {"type": "number", "default": 30}}, "required": ["url"]}, http_request, validator=_validate_http))
+    registry.register(Tool("present_options", "Present a short numbered menu of choices to the user and return the selected choice.", {"type": "object", "properties": {"title": {"type": "string", "default": "Choose an option"}, "options": {"type": "array", "items": {"type": "string"}}, "allow_custom": {"type": "boolean", "default": True}}, "required": ["options"]}, _present_options_placeholder))
+    registry.register(Tool("add_todo", "Add a todo item to the shared list.", {"type": "object", "properties": {"description": {"type": "string"}}, "required": ["description"]}, add_todo))
+    registry.register(Tool("complete_todo", "Mark a todo item as completed.", {"type": "object", "properties": {"todo_id": {"type": "string"}}, "required": ["todo_id"]}, complete_todo))
+    registry.register(Tool("update_todo", "Change the description of a todo item.", {"type": "object", "properties": {"todo_id": {"type": "string"}, "description": {"type": "string"}}, "required": ["todo_id", "description"]}, update_todo))
+    registry.register(Tool("list_todos", "List the current todo items.", {"type": "object", "properties": {}}, list_todos))
     return registry
 
 def parse_arguments(raw: str) -> dict[str, Any]:

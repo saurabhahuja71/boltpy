@@ -11,6 +11,7 @@ class PermissionMode(StrEnum):
     """Whether approval is required for tools that declare a capability."""
     ASK = "ask"
     ALLOW = "allow"
+    PLAN = "plan"
 
 class PermissionDecision(StrEnum):
     """Decision returned by a permission handler."""
@@ -85,6 +86,10 @@ class PermissionManager:
         """Return a decision, pausing asynchronously when a handler is present."""
         if not request.capability or self.mode == PermissionMode.ALLOW:
             return PermissionDecision.ALLOW_ONCE
+        if self.mode == PermissionMode.PLAN:
+            # Plan mode blocks write/shell actions so the agent must propose a
+            # plan instead; read-only tools have no capability and pass above.
+            return PermissionDecision.DENY
         if request.capability in self._session_grants:
             return PermissionDecision.ALLOW_SESSION
         section, scope = self._scope(request)

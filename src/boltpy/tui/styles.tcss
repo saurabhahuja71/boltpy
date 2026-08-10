@@ -1,40 +1,56 @@
-Screen { background: #101318; color: #e6edf3; }
+Screen { background: $background; color: $text; }
 #main { height: 1fr; padding: 0 1; }
-#transcript { height: 1fr; border: round #30363d; background: #0d1117; padding: 1 2; scrollbar-color: #586069; }
-#streaming { height: auto; max-height: 12; padding: 0 2; color: #d2a8ff; }
-#cwd { height: 1; color: #8b949e; padding: 0 1; text-overflow: ellipsis; }
-#status { height: 1; color: #8b949e; padding: 0 1; }
-#prompt { height: 6; min-height: 3; max-height: 12; border: round #238636; background: #161b22; padding: 0 1; }
+#cwd { height: 1; color: $text-muted; padding: 0 1; text-overflow: ellipsis; }
+#content { height: 1fr; }
+#transcript { height: 1fr; border: round $border; background: $surface; padding: 0 1; scrollbar-color: $text-disabled; }
+#streaming { height: auto; max-height: 12; padding: 0 2; color: $secondary; }
+#status { height: 1; color: $text-muted; padding: 0 1; }
+#prompt { height: 6; min-height: 3; max-height: 12; border: round $success; background: $panel; padding: 0 1; }
 
-#permission-prompt { display: none; width: 100%; height: auto; max-height: 12; padding: 1 2; margin: 0 1; border: round #d29922; background: #161b22; }
+#todo-panel { width: 38; height: 100%; margin-left: 1; border: round $border; background: $surface; padding: 1 1; overflow-y: auto; }
+
+.system-message { padding: 1 2 0 0; height: auto; }
+.assistant-block { height: auto; margin: 1 0 0 0; padding: 0 1; border: round $border-blurred; }
+.assistant-block Markdown { height: auto; margin: 0 0 1 0; }
+.message-title { height: 1; text-style: bold; color: $accent; margin: 0 0 1 0; }
+
+.tool-card { height: auto; padding: 0 1; }
+.tool-args { height: auto; color: $text; text-style: bold; }
+.tool-status { height: 1; }
+.tool-status-success { color: $success; }
+.tool-status-warning { color: $warning; }
+.tool-status-error { color: $error; }
+.tool-result { height: auto; color: $text-muted; }
+
+#permission-prompt { display: none; width: 100%; height: auto; max-height: 12; padding: 1 2; margin: 0 1; border: round $warning; background: $panel; }
 #permission-content { width: 100%; height: auto; }
-#permission-title { height: 1; text-style: bold; color: #f2cc60; }
+#permission-title { height: 1; text-style: bold; color: $warning; }
 #permission-tool { height: 1; padding-top: 1; text-style: bold; }
-#permission-details { height: auto; max-height: 5; padding: 1 1; color: #e6edf3; overflow-y: auto; }
+#permission-details { height: auto; max-height: 5; padding: 1 1; color: $text; overflow-y: auto; }
 #permission-buttons { height: 3; width: 100%; layout: horizontal; align: left middle; }
 #permission-buttons Button { width: auto; min-width: 14; height: 3; margin: 0 1 0 0; border: tall transparent; text-style: bold; }
-#permission-buttons Button:hover { background: #3b4f68; color: #ffffff; border: tall #79c0ff; }
-#permission-buttons Button:focus { background: #1f6feb; color: #ffffff; border: tall #f2cc60; text-style: bold underline; }
-#permission-buttons #allow-once:focus { background: #238636; }
-#permission-buttons #allow-session:focus { background: #1f6feb; }
-#permission-buttons #allow-permanent:focus { background: #9e6a03; }
-#permission-buttons #deny:focus { background: #da3633; }
-#model-prompt { display: none; width: 100%; height: auto; max-height: 12; padding: 1 2; margin: 0 1; border: round #58a6ff; background: #161b22; }
-#model-content { width: 100%; height: auto; }
-#model-title { height: 1; text-style: bold; color: #79c0ff; }
-#model-options { height: auto; max-height: 7; padding: 0 1; border: none; }
-#model-options:focus { border: round #79c0ff; }
-#model-help { height: 1; color: #8b949e; padding-top: 1; }
-#permission-help { height: 1; color: #8b949e; padding-top: 1; }
+#permission-buttons Button:hover { background: $primary-darken-1; color: $text; border: tall $primary; }
+#permission-buttons Button:focus { background: $primary; color: $foreground; border: tall $warning; text-style: bold underline; }
+#permission-buttons #allow-once:focus { background: $success; }
+#permission-buttons #allow-session:focus { background: $primary; }
+#permission-buttons #allow-permanent:focus { background: $warning; }
+#permission-buttons #deny:focus { background: $error; }
+#permission-help { height: 1; color: $text-muted; padding-top: 1; }
 
-.light { background: #f6f8fa; color: #24292f; }
-.light #transcript { background: #ffffff; border: round #afb8c1; color: #24292f; }
-.light #streaming { color: #8250df; }
-.light #cwd { color: #57606a; }
-.light #status { color: #57606a; }
-.light #prompt { background: #ffffff; border: round #1a7f37; color: #24292f; }
-.light #permission-prompt { background: #ffffff; border: round #9a6700; }
-.light #permission-details { color: #24292f; }
-.light #permission-help { color: #57606a; }
-.light #model-prompt { background: #ffffff; border: round #0969da; }
-.light #model-help { color: #57606a; }
+#model-prompt { display: none; width: 100%; height: auto; max-height: 12; padding: 1 2; margin: 0 1; border: round $primary; background: $panel; }
+#model-content { width: 100%; height: auto; }
+#model-title { height: 1; text-style: bold; color: $primary; }
+#model-options { height: auto; max-height: 7; padding: 0 1; border: none; }
+#model-options:focus { border: round $primary; }
+#model-help { height: 1; color: $text-muted; padding-top: 1; }
+
+#options-prompt { display: none; width: 100%; height: auto; max-height: 14; padding: 1 2; margin: 0 1; border: round $accent; background: $panel; }
+#options-content { width: 100%; height: auto; }
+#options-title { height: 1; text-style: bold; color: $accent; }
+#options-list { height: auto; max-height: 8; padding: 0 1; border: none; }
+#options-list:focus { border: round $accent; }
+#options-custom { display: none; height: 3; margin-top: 1; border: round $border; }
+#options-help { height: 1; color: $text-muted; padding-top: 1; }
+
+Collapsible { border: none; height: auto; }
+Collapsible > .collapsible--header { color: $text; text-style: bold; }

@@ -7,15 +7,17 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 class Settings(BaseModel):
-    """Runtime settings for OpenAI-compatible APIs."""
+    """Runtime settings for Boltpy providers and the TUI."""
     model_config = ConfigDict(extra="ignore")
+    provider: str = "openai"
     model: str = "gpt-4o-mini"
     models: list[str] = Field(default_factory=list)
     api_key: str | None = None
     base_url: str | None = None
     temperature: float = Field(default=0.2, ge=0, le=2)
     system_prompt: str = "You are Boltpy, a helpful terminal coding assistant."
-    permission_mode: Literal["ask", "allow"] = "ask"
+    permission_mode: Literal["ask", "allow", "plan"] = "ask"
+    theme: str = "dark"
 
     def available_models(self) -> list[str]:
         """Return configured models with the active model first."""
@@ -28,12 +30,23 @@ def _read_toml(path: Path) -> dict[str, Any]:
         value = tomllib.load(file)
     return value if isinstance(value, dict) else {}
 
+_ENV_FIELDS = {
+    "OPENAI_API_KEY": "api_key",
+    "OPENAI_BASE_URL": "base_url",
+    "OPENAI_MODEL": "model",
+    "OPENAI_PROVIDER": "provider",
+    "BOLTPY_PROVIDER": "provider",
+    "BOLTPY_MODELS": "models",
+    "BOLTPY_PERMISSION_MODE": "permission_mode",
+    "BOLTPY_THEME": "theme",
+}
+
 def load_settings() -> Settings:
     """Load defaults, user config, local config, then environment values."""
     values: dict[str, Any] = {}
     values.update(_read_toml(Path.home() / ".config" / "boltpy" / "config.toml"))
     values.update(_read_toml(Path.cwd() / "boltpy.toml"))
-    for env_name, field_name in {"OPENAI_API_KEY": "api_key", "OPENAI_BASE_URL": "base_url", "OPENAI_MODEL": "model", "BOLTPY_PERMISSION_MODE": "permission_mode", "BOLTPY_MODELS": "models"}.items():
+    for env_name, field_name in _ENV_FIELDS.items():
         if value := os.getenv(env_name):
             values[field_name] = [item.strip() for item in value.split(",") if item.strip()] if field_name == "models" else value
     return Settings(**values)
