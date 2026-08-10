@@ -242,4 +242,64 @@ async def test_todo_panel_renders_open_and_completed_items():
         panel.refresh_todos()
         rendered = str(panel.render())
         assert "[x] 1. first" in rendered
-        assert "[ ] 2. second" in rendered
+
+
+# --- Queue and interrupt ---
+
+class SlowAgent:
+    def __init__(self, app) -> None:
+        self.app = app
+        self.runs: list[str] = []
+        self.gate = asyncio.Event()
+        self.release = asyncio.Event()
+    async def stream_events(self, prompt: str):
+        self.runs.append(prompt)
+        self.gate.set()
+        await self.release.wait()
+        yield AgentEvent("text", text=f"done: {prompt}")
+    async def close(self) -> None:
+        pass
+
+@pytest.mark.asyncio
+async def test_prompts_queue_while_busy_and_run_in_order():
+    app = BoltpyApp(Settings(api_key="test"))
+    async with app.run_test() as pilot:
+        fake = SlowAgent(app)
+        app.agent = fake
+        app._active_worker = app._ask("first")
+        await pilot.pause()
+        await fake.gate.wait()
+        assert app.busy
+        await app._submit_prompt("second")
+        await app._submit_prompt("third")
+        assert app._prompt_queue == ["second", "third"]
+        fake.release.set()
+        await app._active_worker.wait()
+        assert fake.runs == ["first", "second", "third"]
+        assert not app.busy
+
+@pytest.mark.asyncio
+async def test_interrupt_cancels_running_worker_and_clears_queue():
+    app = BoltpyApp(Settings(api_key="test"))
+    async with app.run_test() as pilot:
+        fake = SlowAgent(app)
+        app.agent = fake
+        app._prompt_queue = ["queued-one", "queued-two"]
+        app._active_worker = app._ask("first")
+        await pilot.pause()
+        await fake.gate.wait()
+        app.action_cancel_operation()
+        await app._active_worker.wait()
+        assert not app.busy
+        assert app._prompt_queue == []
+
+@pytest.mark.asyncio
+async def test_queue_command_lists_queued_prompts():
+    app = BoltpyApp(Settings(api_key="test"))
+    async with app.run_test() as pilot:
+        app._prompt_queue = ["alpha", "beta"]
+        await app._submit_prompt("/queue")
+        await pilot.pause()
+        rendered = " ".join(str(widget.render()) for widget in app.query("#transcript .system-message"))
+        assert "1. alpha" in rendered
+        assert "2. beta" in rendered

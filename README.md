@@ -67,12 +67,15 @@ The TUI provides streaming Textual Markdown with syntax-highlighted fenced code,
 /model
 /mode ask|allow|plan
 /todo
+/queue
 /permissions
 /theme dark|light
 /mouse interactive|select
 /new
 /quit
 ```
+
+Prompts sent while a task is running are queued and run in order when it finishes; the status bar shows the number waiting and `/queue` lists them. Ctrl+C cancels the current task and clears the queue.
 
 Text selection and clipboard behavior remain terminal-native. Interactive mode is the default: mouse clicks and scrolling work on widgets such as permission/model buttons. Use `/mouse select` when you need native terminal selection — drag across conversation text and use the terminal’s copy/paste shortcuts, commonly Ctrl+Shift+C / Ctrl+Shift+V or Shift+Insert — then return with `/mouse interactive`; Ctrl+M toggles between both modes.
 

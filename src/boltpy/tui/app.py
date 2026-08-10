@@ -250,6 +250,7 @@ class BoltpyApp(App[None]):
 
     def __init__(self, settings: Settings) -> None:
         super().__init__(); self.settings = settings; self.busy = False; self.theme_name = "dark"; self.mouse_mode = "interactive"
+        self._prompt_queue: list[str] = []
         self._permission_future: asyncio.Future[PermissionDecision] | None = None
         self._options_future: asyncio.Future[str] | None = None
         self._model_prompt: ModelPrompt | None = None
@@ -336,7 +337,7 @@ class BoltpyApp(App[None]):
 
     def action_cancel_operation(self) -> None:
         """Cancel the active model or tool worker."""
-        if self._active_worker is not None and not self._active_worker.finished:
+        if self._active_worker is not None and not self._active_worker.is_finished:
             self._set_status("Cancelling…")
             self._active_worker.cancel()
 
@@ -455,16 +456,30 @@ class BoltpyApp(App[None]):
     async def on_prompt_text_area_submitted(self, event: PromptTextArea.Submitted) -> None: await self._submit_prompt(event.text)
 
     async def _submit_prompt(self, value: str) -> None:
-        if self.busy or not value.strip(): return
-        prompt = value.strip(); self.query_one("#prompt", PromptTextArea).text = ""
+        prompt = value.strip()
+        if not prompt: return
+        if self.busy:
+            if prompt.startswith("/"):
+                return
+            self._prompt_queue.append(prompt)
+            self._write(f"[dim]Queued ({len(self._prompt_queue)} waiting): {prompt[:80]}{'…' if len(prompt) > 80 else ''}[/dim]", markup=True)
+            self._set_status(f"Queued ({len(self._prompt_queue)} waiting) — Ctrl+C to cancel")
+            return
+        self.query_one("#prompt", PromptTextArea).text = ""
         if prompt == "/quit": self.exit()
         elif prompt == "/new": self.agent.reset(); self._write("[dim]Started a new conversation.[/dim]", markup=True)
         elif prompt == "/help":
-            self._write("[bold]Commands[/bold]\n/help  show commands and controls\n/mode  inspect permission mode\n/mode ask|allow|plan  change permission mode\n/theme dark|light  switch theme\n/model  choose the active configured model\n/todo  toggle the todo panel\n/permissions  list permanent approvals\n/permissions remove <command>  remove an exact approval\n/mouse interactive|select  widget mouse (default) or native selection\n/new  start a new conversation\n/quit  exit\n\n[bold]Keys[/bold]\nEnter send · Shift+Enter newline · Ctrl+Q quit · Ctrl+T todos\nPermission: ←/→ or Tab select · Enter/Space confirm · Esc deny", markup=True)
+            self._write("[bold]Commands[/bold]\n/help  show commands and controls\n/mode  inspect permission mode\n/mode ask|allow|plan  change permission mode\n/theme dark|light  switch theme\n/model  choose the active configured model\n/todo  toggle the todo panel\n/queue  list queued prompts\n/permissions  list permanent approvals\n/permissions remove <command>  remove an exact approval\n/mouse interactive|select  widget mouse (default) or native selection\n/new  start a new conversation\n/quit  exit\n\n[bold]Keys[/bold]\nEnter send · Shift+Enter newline · Ctrl+Q quit · Ctrl+T todos · Ctrl+C cancel\nPermission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\nType while a task is running to queue it; Ctrl+C cancels the current task.", markup=True)
         elif prompt == "/model":
             self.query_one(ModelPrompt).present(await self._available_models(), self.settings.model)
         elif prompt == "/todo":
             self.action_toggle_todo()
+        elif prompt == "/queue":
+            if not self._prompt_queue:
+                self._write("[dim]No prompts queued.[/dim]", markup=True)
+            else:
+                lines = [f"{index}. {item[:80]}{'…' if len(item) > 80 else ''}" for index, item in enumerate(self._prompt_queue, 1)]
+                self._write("[bold]Queued prompts[/bold] (" + str(len(self._prompt_queue)) + " waiting)\n" + "\n".join(lines), markup=True)
         elif prompt == "/permissions":
             entries = self.permissions.permanent_entries()
             self._write("[bold]Permanent permissions[/bold]\n" + ("\n".join(f"✓ {section}: {scope}" for section, scope in entries) if entries else "(none)"), markup=True)
@@ -498,32 +513,42 @@ class BoltpyApp(App[None]):
     @work(exclusive=True)
     async def _ask(self, prompt: str) -> None:
         transcript = self.query_one("#transcript", ConversationLog); streaming = self.query_one("#streaming", Markdown)
-        self.busy = True; self._write(self._user_message(prompt)); answer_parts: list[str] = []
-        streaming.update(""); self._set_status("Thinking…")
+        self.busy = True
         try:
-            async for event in self.agent.stream_events(prompt):
-                if event.kind == "text":
-                    answer_parts.append(event.text); streaming.update("".join(answer_parts))
-                elif event.kind == "tool_call":
-                    self._tool_started[event.name] = time.perf_counter(); self._tool_arguments[event.name] = event.arguments or {}
-                    self._add_tool_card(event.name, event.arguments or {}, "running…")
-                elif event.kind == "permission" and event.status == "waiting":
-                    self._update_tool_card(event.name, "waiting for permission"); self._set_status(f"Waiting for {event.name} approval…")
-                elif event.kind == "permission" and event.status != "waiting":
-                    self._update_tool_card(event.name, "approved" if event.status in {"allow_once", "allow_session", "allow_permanent"} else "denied")
-                elif event.kind == "tool_result":
-                    result = event.result; summary = result.display() if result else "unknown error"
-                    if event.name in _TODO_TOOLS:
-                        self.query_one(TodoPanel).refresh_todos()
-                    self._update_tool_card(event.name, "✓ completed" if result and result.ok else "✗ failed", summary)
-            if answer_parts: transcript.log(self._assistant_block("".join(answer_parts)))
-            streaming.update(""); self._set_status("Ready")
+            while True:
+                await self._run_prompt(prompt, transcript, streaming)
+                if not self._prompt_queue:
+                    break
+                prompt = self._prompt_queue.pop(0)
+                self._set_status("Running next queued prompt…")
         except asyncio.CancelledError:
+            self._prompt_queue.clear()
             streaming.update(""); self._write("[yellow]Operation cancelled.[/yellow]", markup=True); self._set_status("Cancelled — ready")
         except Exception as error:
             streaming.update(""); self._write(Static(Text(str(error), style="red"), classes="system-message")); self._set_status("Error — ready")
         finally:
             self.busy = False
             self._active_worker = None
+
+    async def _run_prompt(self, prompt: str, transcript: ConversationLog, streaming: Markdown) -> None:
+        self._write(self._user_message(prompt)); answer_parts: list[str] = []
+        streaming.update(""); self._set_status("Thinking…")
+        async for event in self.agent.stream_events(prompt):
+            if event.kind == "text":
+                answer_parts.append(event.text); streaming.update("".join(answer_parts))
+            elif event.kind == "tool_call":
+                self._tool_started[event.name] = time.perf_counter(); self._tool_arguments[event.name] = event.arguments or {}
+                self._add_tool_card(event.name, event.arguments or {}, "running…")
+            elif event.kind == "permission" and event.status == "waiting":
+                self._update_tool_card(event.name, "waiting for permission"); self._set_status(f"Waiting for {event.name} approval…")
+            elif event.kind == "permission" and event.status != "waiting":
+                self._update_tool_card(event.name, "approved" if event.status in {"allow_once", "allow_session", "allow_permanent"} else "denied")
+            elif event.kind == "tool_result":
+                result = event.result; summary = result.display() if result else "unknown error"
+                if event.name in _TODO_TOOLS:
+                    self.query_one(TodoPanel).refresh_todos()
+                self._update_tool_card(event.name, "✓ completed" if result and result.ok else "✗ failed", summary)
+        if answer_parts: transcript.log(self._assistant_block("".join(answer_parts)))
+        streaming.update(""); self._set_status("Ready")
 
     async def on_unmount(self) -> None: await self.agent.close()
