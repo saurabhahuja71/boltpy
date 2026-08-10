@@ -319,7 +319,7 @@ async def test_prompts_queue_while_busy_and_run_in_order():
         assert not app.busy
 
 @pytest.mark.asyncio
-async def test_interrupt_cancels_running_worker_and_clears_queue():
+async def test_interrupt_cancels_running_worker_but_keeps_queue():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
         fake = SlowAgent(app)
@@ -329,7 +329,14 @@ async def test_interrupt_cancels_running_worker_and_clears_queue():
         await pilot.pause()
         await fake.gate.wait()
         app.action_cancel_operation()
+        await pilot.pause()
+        # the current prompt is cancelled but queued prompts survive and the next one starts
+        assert app.busy
+        assert fake.runs == ["first", "queued-one"]
+        assert app._prompt_queue == ["queued-two"]
+        fake.release.set()
         await app._active_worker.wait()
+        assert fake.runs == ["first", "queued-one", "queued-two"]
         assert not app.busy
         assert app._prompt_queue == []
 

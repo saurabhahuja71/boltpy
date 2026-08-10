@@ -315,8 +315,16 @@ class BoltpyApp(App[None]):
     def _set_status(self, text: str) -> None:
         provider = getattr(getattr(self.agent, "provider", None), "provider_name", "openai")
         tokens = getattr(getattr(self.agent, "provider", None), "total_tokens", 0)
-        self.query_one("#status", Static).update(
-            f"Boltpy | Mode: {self.permissions.mode.upper()} | Model: {provider}/{self.settings.model} | Tokens: {tokens} | {text}")
+        status = Text()
+        status.append(f"Boltpy | Mode: {self.permissions.mode.upper()} | Model: {provider}/{self.settings.model} | Tokens: {tokens}")
+        if self.busy:
+            status.append(" | ", style="dim")
+            status.append("Processing…", style="blink bold")
+            status.append(f"  {text}", style="dim")
+            status.append("   Ctrl+C to interrupt", style="yellow")
+        else:
+            status.append(f" | {text}")
+        self.query_one("#status", Static).update(status)
 
     def _set_mouse_mode(self, mode: str) -> None:
         """Toggle terminal mouse reporting for native selection or widget interaction."""
@@ -512,19 +520,21 @@ class BoltpyApp(App[None]):
         self.busy = True
         try:
             while True:
-                await self._run_prompt(prompt, transcript)
+                try:
+                    await self._run_prompt(prompt, transcript)
+                except asyncio.CancelledError:
+                    self._write("[yellow]Operation cancelled.[/yellow]", markup=True)
+                    self._set_status("Cancelled — running next queued prompt…" if self._prompt_queue else "Cancelled — ready")
                 if not self._prompt_queue:
                     break
                 prompt = self._prompt_queue.pop(0)
                 self._set_status("Running next queued prompt…")
-        except asyncio.CancelledError:
-            self._prompt_queue.clear()
-            self._write("[yellow]Operation cancelled.[/yellow]", markup=True); self._set_status("Cancelled — ready")
         except Exception as error:
             self._write(Static(Text(str(error), style="red"), classes="system-message")); self._set_status("Error — ready")
         finally:
             self.busy = False
             self._active_worker = None
+            self.query_one("#prompt", PromptTextArea).focus()
 
     async def _run_prompt(self, prompt: str, transcript: ConversationLog) -> None:
         self._write(self._user_message(prompt)); answer_parts: list[str] = []
