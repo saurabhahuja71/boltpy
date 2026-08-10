@@ -2,17 +2,14 @@ Screen { background: $background; color: $text; }
 #main { height: 1fr; padding: 0 1; }
 #cwd { height: 1; color: $text-muted; padding: 0 1; text-overflow: ellipsis; }
 #content { height: 1fr; }
-#transcript { height: 1fr; border: round $border; background: $surface; padding: 0 1; scrollbar-color: $text-disabled; }
-#streaming { height: auto; max-height: 12; padding: 0 2; color: $secondary; }
+#transcript { width: 1fr; height: 1fr; border: round $border; background: $surface; padding: 0 1; scrollbar-color: $text-disabled; }
 #status { height: 1; color: $text-muted; padding: 0 1; }
 #prompt { height: 6; min-height: 3; max-height: 12; border: round $success; background: $panel; padding: 0 1; }
 
 #todo-panel { width: 38; height: 100%; margin-left: 1; border: round $border; background: $surface; padding: 1 1; overflow-y: auto; }
 
 .system-message { padding: 1 2 0 0; height: auto; }
-.assistant-block { height: auto; margin: 1 0 0 0; padding: 0 1; border: round $border-blurred; }
-.assistant-block Markdown { height: auto; margin: 0 0 1 0; }
-.message-title { height: 1; text-style: bold; color: $accent; margin: 0 0 1 0; }
+.assistant-streaming { height: auto; margin: 1 0 0 0; padding: 0 1; border: round $border-blurred; }
 
 .tool-card { height: auto; padding: 0 1; }
 .tool-args { height: auto; color: $text; text-style: bold; }

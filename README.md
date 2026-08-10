@@ -60,7 +60,7 @@ Configure available model names with `models` or `BOLTPY_MODELS`, then use `/mod
 
 ## Terminal UI
 
-The TUI provides streaming Textual Markdown with syntax-highlighted fenced code, tables, lists, links, collapsible tool cards with running/success/failed/denied states, a CSS-variable theme system with dark/light themes, a live todo side panel (`Ctrl+T` or `/todo`), a numbered options picker with a typed answer, inline permission controls, a visible `CWD:` line at the top, and a status bar formatted as `Boltpy | Mode: ASK/ALLOW/PLAN | Model: provider/model | Tokens: n`. Useful commands:
+The TUI has a single chat transcript on the left with a collapsible todo side panel on the right; streaming text and tool cards all render into that one transcript, with the status bar and input at the bottom. It provides streaming Textual Markdown with syntax-highlighted fenced code, tables, lists, links, collapsible tool cards with running/success/failed/denied states, a CSS-variable theme system with dark/light themes, a live todo side panel (`Ctrl+T` or `/todo`), a numbered options picker with a typed answer, inline permission controls, a visible `CWD:` line at the top, and a status bar formatted as `Boltpy | Mode: ASK/ALLOW/PLAN | Model: provider/model | Tokens: n`. Useful commands:
 
 ```text
 /help

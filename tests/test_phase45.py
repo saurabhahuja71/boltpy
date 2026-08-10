@@ -244,6 +244,46 @@ async def test_todo_panel_renders_open_and_completed_items():
         assert "[x] 1. first" in rendered
 
 
+# --- Layout: single transcript + todo sidebar ---
+
+@pytest.mark.asyncio
+async def test_layout_has_one_transcript_and_no_duplicate_output_area():
+    from textual.containers import Horizontal
+    app = BoltpyApp(Settings(api_key="test"))
+    async with app.run_test():
+        content = app.query_one("#content", Horizontal)
+        assert len(content.query("#transcript")) == 1
+        assert len(content.query("#todo-panel")) == 1
+        assert len(app.query("#streaming")) == 0
+        assert len(app.query("#transcript")) == 1
+
+@pytest.mark.asyncio
+async def test_hiding_todo_panel_lets_transcript_take_full_width():
+    app = BoltpyApp(Settings(api_key="test"))
+    async with app.run_test() as pilot:
+        panel = app.query_one("#todo-panel")
+        assert panel.display
+        app.action_toggle_todo()
+        await pilot.pause()
+        assert not panel.display
+
+@pytest.mark.asyncio
+async def test_streaming_writes_into_transcript_not_standalone_widget():
+    app = BoltpyApp(Settings(api_key="test"))
+    async with app.run_test() as pilot:
+        fake = SlowAgent(app)
+        fake.release.set()
+        app.agent = fake
+        worker = app._ask("hello")
+        await pilot.pause()
+        await fake.gate.wait()
+        fake.release.set()
+        await worker.wait()
+        streaming = app.query_one(".assistant-streaming")
+        assert streaming.parent is app.query_one("#transcript")
+        assert "hello" in streaming.source
+
+
 # --- Queue and interrupt ---
 
 class SlowAgent:

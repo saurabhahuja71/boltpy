@@ -31,9 +31,13 @@ class ConversationLog(VerticalScroll):
     def on_scroll(self, event: events.Scroll) -> None:
         self._pinned = self.scroll_y < self.max_scroll_y
 
-    def log(self, widget: Widget) -> None:
+    def log(self, widget: Widget) -> object:
         """Mount a widget and scroll to the end unless the user is reading above."""
-        self.mount(widget)
+        result = self.mount(widget)
+        self.scroll_to_end()
+        return result
+
+    def scroll_to_end(self) -> None:
         if not getattr(self, "_pinned", False):
             self.call_after_refresh(lambda: self.scroll_end(animate=False))
 
@@ -279,7 +283,6 @@ class BoltpyApp(App[None]):
             with Horizontal(id="content"):
                 yield ConversationLog(id="transcript")
                 yield TodoPanel()
-            yield Markdown("", id="streaming")
             yield PermissionPrompt()
             yield ModelPrompt()
             yield OptionsPrompt()
@@ -308,13 +311,6 @@ class BoltpyApp(App[None]):
         message = Text("You: ", style="bold green")
         message.append(text)
         return Static(message, classes="system-message")
-
-    def _assistant_block(self, text: str) -> Vertical:
-        return Vertical(
-            Static("Boltpy", classes="message-title"),
-            Markdown(text),
-            classes="assistant-block",
-        )
 
     def _set_status(self, text: str) -> None:
         provider = getattr(getattr(self.agent, "provider", None), "provider_name", "openai")
@@ -512,30 +508,32 @@ class BoltpyApp(App[None]):
 
     @work(exclusive=True)
     async def _ask(self, prompt: str) -> None:
-        transcript = self.query_one("#transcript", ConversationLog); streaming = self.query_one("#streaming", Markdown)
+        transcript = self.query_one("#transcript", ConversationLog)
         self.busy = True
         try:
             while True:
-                await self._run_prompt(prompt, transcript, streaming)
+                await self._run_prompt(prompt, transcript)
                 if not self._prompt_queue:
                     break
                 prompt = self._prompt_queue.pop(0)
                 self._set_status("Running next queued prompt…")
         except asyncio.CancelledError:
             self._prompt_queue.clear()
-            streaming.update(""); self._write("[yellow]Operation cancelled.[/yellow]", markup=True); self._set_status("Cancelled — ready")
+            self._write("[yellow]Operation cancelled.[/yellow]", markup=True); self._set_status("Cancelled — ready")
         except Exception as error:
-            streaming.update(""); self._write(Static(Text(str(error), style="red"), classes="system-message")); self._set_status("Error — ready")
+            self._write(Static(Text(str(error), style="red"), classes="system-message")); self._set_status("Error — ready")
         finally:
             self.busy = False
             self._active_worker = None
 
-    async def _run_prompt(self, prompt: str, transcript: ConversationLog, streaming: Markdown) -> None:
+    async def _run_prompt(self, prompt: str, transcript: ConversationLog) -> None:
         self._write(self._user_message(prompt)); answer_parts: list[str] = []
-        streaming.update(""); self._set_status("Thinking…")
+        streaming = Markdown("", classes="assistant-streaming")
+        await transcript.log(streaming)
+        self._set_status("Thinking…")
         async for event in self.agent.stream_events(prompt):
             if event.kind == "text":
-                answer_parts.append(event.text); streaming.update("".join(answer_parts))
+                answer_parts.append(event.text); await streaming.update("".join(answer_parts)); transcript.scroll_to_end()
             elif event.kind == "tool_call":
                 self._tool_started[event.name] = time.perf_counter(); self._tool_arguments[event.name] = event.arguments or {}
                 self._add_tool_card(event.name, event.arguments or {}, "running…")
@@ -548,7 +546,8 @@ class BoltpyApp(App[None]):
                 if event.name in _TODO_TOOLS:
                     self.query_one(TodoPanel).refresh_todos()
                 self._update_tool_card(event.name, "✓ completed" if result and result.ok else "✗ failed", summary)
-        if answer_parts: transcript.log(self._assistant_block("".join(answer_parts)))
-        streaming.update(""); self._set_status("Ready")
+        if not answer_parts:
+            streaming.remove()
+        self._set_status("Ready")
 
     async def on_unmount(self) -> None: await self.agent.close()
