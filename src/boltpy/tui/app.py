@@ -244,7 +244,7 @@ class BoltpyApp(App[None]):
     BINDINGS = [
         ("ctrl+q", "quit", "Quit"),
         ("ctrl+c", "cancel_operation", "Cancel operation"),
-        ("ctrl+shift+m", "toggle_mouse", "Toggle mouse mode"),
+        ("ctrl+m", "toggle_mouse", "Toggle mouse mode"),
         ("ctrl+t", "toggle_todo", "Toggle todos"),
     ]
 
