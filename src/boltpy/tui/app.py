@@ -77,16 +77,24 @@ class PromptTextArea(TextArea):
     class CommandsRequested(Message):
         pass
 
+    class ShortcutRequested(Message):
+        def __init__(self, shortcut: str) -> None:
+            super().__init__(); self.shortcut = shortcut
+
     class Submitted(Message):
         def __init__(self, textarea: "PromptTextArea") -> None:
             super().__init__(); self.text = textarea.text
     async def _on_key(self, event: events.Key) -> None:
-        # Some terminals encode Shift+P as the indistinguishable uppercase
-        # ``P`` key instead of the ``shift+p`` name used by Textual bindings.
-        # Treat it as the command palette only when the prompt is empty; an
-        # uppercase P in an active prompt remains ordinary text.
-        if event.key in {"alt+p", "ctrl+shift+p"} and not self.text:
-            event.stop(); event.prevent_default(); self.post_message(self.CommandsRequested()); return
+        shortcuts = {
+            "alt+p": "p", "ctrl+shift+p": "p",
+            "alt+m": "m", "ctrl+shift+m": "m",
+            "alt+t": "t", "ctrl+shift+t": "t",
+            "alt+i": "i", "ctrl+shift+i": "i",
+            "ctrl+q": "q", "alt+q": "q",
+        }
+        shortcut = shortcuts.get(event.key)
+        if shortcut is not None:
+            event.stop(); event.prevent_default(); self.post_message(self.ShortcutRequested(shortcut)); return
         if event.key == "enter":
             event.stop(); event.prevent_default(); self.post_message(self.Submitted(self)); return
         if event.key == "shift+enter":
@@ -394,6 +402,13 @@ class BoltpyApp(App[None]):
 
     def on_prompt_text_area_commands_requested(self, event: PromptTextArea.CommandsRequested) -> None:
         self.action_show_commands()
+
+    def on_prompt_text_area_shortcut_requested(self, event: PromptTextArea.ShortcutRequested) -> None:
+        actions = {"p": self.action_show_commands, "m": self.action_toggle_mode, "t": self.action_toggle_todo, "i": self.action_toggle_mouse}
+        if event.shortcut == "q":
+            self.exit()
+        elif action := actions.get(event.shortcut):
+            action()
 
     def action_toggle_mouse(self) -> None:
         self._set_mouse_mode("select" if self.mouse_mode == "interactive" else "interactive")
