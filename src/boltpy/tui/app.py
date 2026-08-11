@@ -36,7 +36,7 @@ _HELP_TEXT = (
     "/new  start a new conversation\n"
     "/quit  exit\n\n"
     "[bold]Keys[/bold]\n"
-    "Enter send · Shift+Enter newline · Ctrl+Shift+P commands · Ctrl+Shift+M mode · Ctrl+Shift+T todos · Ctrl+Shift+I interactive cursor · Ctrl+Q quit · Ctrl+C cancel\n"
+    "Enter send · Alt+P commands · Ctrl+Shift+M mode · Ctrl+Shift+T todos · Ctrl+Shift+I interactive cursor · Ctrl+Q quit · Ctrl+C cancel\n"
     "Permission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\n"
     "Type while a task is running to queue it; Ctrl+C cancels the current task."
 )
@@ -80,11 +80,9 @@ class PromptTextArea(TextArea):
         def __init__(self, textarea: "PromptTextArea") -> None:
             super().__init__(); self.text = textarea.text
     async def _on_key(self, event: events.Key) -> None:
-        # Some terminals encode Ctrl+Shift+P as the indistinguishable uppercase
-        # ``P`` key instead of the ``ctrl+shift+p`` name used by Textual bindings.
-        # Treat it as the command palette only when the prompt is empty; an
-        # uppercase P in an active prompt remains ordinary text.
-        if event.key == "ctrl+shift+p" and not self.text:
+        # Handle the command palette from the focused prompt so Alt+P is not
+        # lost to widget focus. Alt+P avoids VS Code's global Ctrl+Shift+P.
+        if event.key == "alt+p" and not self.text:
             event.stop(); event.prevent_default(); self.post_message(self.CommandsRequested()); return
         if event.key == "enter":
             event.stop(); event.prevent_default(); self.post_message(self.Submitted(self)); return
@@ -286,7 +284,7 @@ class BoltpyApp(App[None]):
     BINDINGS = [
         ("ctrl+c", "cancel_operation", "Cancel operation"),
         ("ctrl+q", "quit", "Quit"),
-        ("ctrl+shift+p", "show_commands", "Show commands"),
+        ("alt+p", "show_commands", "Show commands"),
         ("ctrl+shift+m", "toggle_mode", "Change permission mode"),
         ("ctrl+shift+t", "toggle_todo", "Toggle todos"),
         ("ctrl+shift+i", "toggle_mouse", "Toggle interactive cursor"),

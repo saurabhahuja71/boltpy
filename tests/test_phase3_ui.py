@@ -44,15 +44,15 @@ async def test_help_documents_phase3_commands_and_controls():
         assert app.query_one(PermissionPrompt).display is False
 
 @pytest.mark.asyncio
-async def test_ctrl_shift_p_shows_all_commands():
+async def test_alt_p_shows_all_commands_without_vscode_palette_conflict():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
-        await pilot.press("ctrl+shift+p")
+        await pilot.press("alt+p")
         await pilot.pause()
-        assert ("ctrl+shift+p", "show_commands", "Show commands") in app.BINDINGS
+        assert ("alt+p", "show_commands", "Show commands") in app.BINDINGS
         rendered = str(app.query_one(ConversationLog).children[-1].render())
         assert "/permissions remove <command>" in rendered
-        assert "Ctrl+Shift+P commands" in rendered
+        assert "Alt+P commands" in rendered
         assert "Ctrl+Shift+M mode" in rendered
 
 @pytest.mark.asyncio
@@ -80,10 +80,10 @@ async def test_ctrl_shift_m_cycles_permission_modes():
         assert ("ctrl+shift+i", "toggle_mouse", "Toggle interactive cursor") in app.BINDINGS
 
 @pytest.mark.asyncio
-async def test_ctrl_shift_p_fallback_shows_commands_when_prompt_is_empty():
+async def test_alt_p_shows_commands_when_prompt_is_empty():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
-        await pilot.press("ctrl+shift+p")
+        await pilot.press("alt+p")
         await pilot.pause()
         assert "/help  show commands and controls" in str(app.query_one(ConversationLog).children[-1].render())
 
