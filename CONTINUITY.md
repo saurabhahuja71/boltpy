@@ -21,7 +21,7 @@
 - Latest fix: Every submitted user task now gets its own visible parent todo, including short prompts; it is completed after normal agent completion and remains open if execution fails or is cancelled.
 - Latest fix: Put `Ctrl+C` first in a compact footer and disabled the extra footer command-palette entry so the cancel shortcut remains visible in narrow terminals.
 - Latest fix: Restored the known-good `68db9f0` shortcut set: `Ctrl+Shift+P/M/T/I`, `Ctrl+Q`, and `Ctrl+C`; removed the later Alt and Escape-prefix handling that caused shortcuts not to work reliably.
-- Latest fix: Changed the command-palette shortcut to `Alt+P` because VS Code intercepts `Ctrl+Shift+P` before Boltpy receives it.
+- Latest fix: Changed the command-reference shortcut to `Ctrl+Shift+S` because `Ctrl+Shift+P` and `Alt+P` are intercepted or unreliable in VS Code terminals.
 - Latest fix: README now documents all tools, commands, shortcuts, permission modes, todo behavior, example prompts, provider setup, and optional `bolt-s1`/`bolt-s2` launchers.
 - Validation: Full pytest suite, compileall, and `git diff --check` pass.
 - Latest fix: Raised the agent tool-call loop ceiling from 8 to 16 iterations and broadened parent-todo detection for longer operational prompts.

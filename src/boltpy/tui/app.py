@@ -36,7 +36,7 @@ _HELP_TEXT = (
     "/new  start a new conversation\n"
     "/quit  exit\n\n"
     "[bold]Keys[/bold]\n"
-    "Enter send · Alt+P commands · Ctrl+Shift+M mode · Ctrl+Shift+T todos · Ctrl+Shift+I interactive cursor · Ctrl+Q quit · Ctrl+C cancel\n"
+    "Enter send · Ctrl+Shift+S commands · Ctrl+Shift+M mode · Ctrl+Shift+T todos · Ctrl+Shift+I interactive cursor · Ctrl+Q quit · Ctrl+C cancel\n"
     "Permission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\n"
     "Type while a task is running to queue it; Ctrl+C cancels the current task."
 )
@@ -80,9 +80,9 @@ class PromptTextArea(TextArea):
         def __init__(self, textarea: "PromptTextArea") -> None:
             super().__init__(); self.text = textarea.text
     async def _on_key(self, event: events.Key) -> None:
-        # Handle the command palette from the focused prompt so Alt+P is not
-        # lost to widget focus. Alt+P avoids VS Code's global Ctrl+Shift+P.
-        if event.key == "alt+p" and not self.text:
+        # Handle the command reference from the focused prompt so the shortcut
+        # is not lost to widget focus. Ctrl+Shift+S avoids VS Code's palette.
+        if event.key == "ctrl+shift+s" and not self.text:
             event.stop(); event.prevent_default(); self.post_message(self.CommandsRequested()); return
         if event.key == "enter":
             event.stop(); event.prevent_default(); self.post_message(self.Submitted(self)); return
@@ -284,7 +284,7 @@ class BoltpyApp(App[None]):
     BINDINGS = [
         ("ctrl+c", "cancel_operation", "Cancel operation"),
         ("ctrl+q", "quit", "Quit"),
-        ("alt+p", "show_commands", "Show commands"),
+        ("ctrl+shift+s", "show_commands", "Show commands"),
         ("ctrl+shift+m", "toggle_mode", "Change permission mode"),
         ("ctrl+shift+t", "toggle_todo", "Toggle todos"),
         ("ctrl+shift+i", "toggle_mouse", "Toggle interactive cursor"),
