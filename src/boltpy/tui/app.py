@@ -36,7 +36,8 @@ _HELP_TEXT = (
     "/new  start a new conversation\n"
     "/quit  exit\n\n"
     "[bold]Keys[/bold]\n"
-    "Enter send · Shift+Enter newline · Ctrl+Shift+P commands · Ctrl+Shift+M mode · Ctrl+Shift+T todos · Ctrl+Shift+I interactive cursor · Ctrl+Q quit · Ctrl+C cancel\n"
+    "Enter send · Shift+Enter newline · Alt+P commands · Alt+M mode · Alt+T todos · Alt+I interactive cursor · Ctrl+Q/Alt+Q quit · Ctrl+C cancel\n"
+    "Compatibility aliases: Ctrl+Shift+P commands · Ctrl+Shift+M mode · Ctrl+Shift+T todos · Ctrl+Shift+I interactive cursor\n"
     "Permission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\n"
     "Type while a task is running to queue it; Ctrl+C cancels the current task."
 )
@@ -84,7 +85,7 @@ class PromptTextArea(TextArea):
         # ``P`` key instead of the ``shift+p`` name used by Textual bindings.
         # Treat it as the command palette only when the prompt is empty; an
         # uppercase P in an active prompt remains ordinary text.
-        if event.key == "ctrl+shift+p" and not self.text:
+        if event.key in {"alt+p", "ctrl+shift+p"} and not self.text:
             event.stop(); event.prevent_default(); self.post_message(self.CommandsRequested()); return
         if event.key == "enter":
             event.stop(); event.prevent_default(); self.post_message(self.Submitted(self)); return
@@ -286,6 +287,11 @@ class BoltpyApp(App[None]):
     BINDINGS = [
         ("ctrl+c", "cancel_operation", "Cancel operation"),
         ("ctrl+q", "quit", "Quit"),
+        ("alt+q", "quit", "Quit"),
+        ("alt+p", "show_commands", "Show commands"),
+        ("alt+m", "toggle_mode", "Change permission mode"),
+        ("alt+t", "toggle_todo", "Toggle todos"),
+        ("alt+i", "toggle_mouse", "Toggle interactive cursor"),
         ("ctrl+shift+p", "show_commands", "Show commands"),
         ("ctrl+shift+m", "toggle_mode", "Change permission mode"),
         ("ctrl+shift+t", "toggle_todo", "Toggle todos"),

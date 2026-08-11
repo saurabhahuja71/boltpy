@@ -20,7 +20,7 @@
 - Latest fix: Removed transcript tool cards to reduce noise; tool progress remains in the status bar. Removed the Ctrl+C hint from the middle status bar so the footer owns that control.
 - Latest fix: Every submitted user task now gets its own visible parent todo, including short prompts; it is completed after normal agent completion and remains open if execution fails or is cancelled.
 - Latest fix: Put `Ctrl+C` first in a compact footer and disabled the extra footer command-palette entry so the cancel shortcut remains visible in narrow terminals.
-- Latest fix: Final shortcuts are `Ctrl+Shift+P` commands, `Ctrl+Shift+M` permission modes, `Ctrl+Shift+T` todos, and `Ctrl+Shift+I` interactive cursor.
+- Latest fix: Added terminal-safe Alt shortcuts: `Alt+P` commands, `Alt+M` permission modes, `Alt+T` todos, `Alt+I` interactive cursor, and `Ctrl+Q`/`Alt+Q` quit. The prior Ctrl+Shift bindings remain compatibility aliases.
 - Latest fix: README now documents all tools, commands, shortcuts, permission modes, todo behavior, example prompts, provider setup, and optional `bolt-s1`/`bolt-s2` launchers.
 - Validation: Full pytest suite, compileall, and `git diff --check` pass.
 - Latest fix: Raised the agent tool-call loop ceiling from 8 to 16 iterations and broadened parent-todo detection for longer operational prompts.
