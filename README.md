@@ -83,14 +83,12 @@ The TUI has a single chat transcript on the left with a collapsible todo side pa
 
 | Shortcut | Action |
 | --- | --- |
-| `Alt+P` | Show all commands and shortcuts (avoids VS Code Ctrl+P) |
-| `Alt+M` | Cycle permission mode: ASK → ALLOW → PLAN |
-| `Alt+T` | Toggle the todo panel |
-| `Alt+I` | Toggle interactive cursor/mouse mode and native text selection |
+| `Ctrl+Shift+P` | Show all commands and shortcuts |
+| `Ctrl+Shift+M` | Cycle permission mode: ASK → ALLOW → PLAN |
+| `Ctrl+Shift+T` | Toggle the todo panel |
+| `Ctrl+Shift+I` | Toggle interactive cursor/mouse mode and native text selection |
 | `Ctrl+C` | Cancel the current task; queued prompts continue afterward |
-| `Ctrl+Q` / `Alt+Q` | Quit |
-
-The previous `Ctrl+Shift+P/M/T/I` shortcuts remain available as compatibility aliases when the terminal forwards them distinctly.
+| `Ctrl+Q` | Quit |
 | `Enter` | Send the prompt |
 | `Shift+Enter` | Insert a newline |
 

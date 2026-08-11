@@ -36,8 +36,7 @@ _HELP_TEXT = (
     "/new  start a new conversation\n"
     "/quit  exit\n\n"
     "[bold]Keys[/bold]\n"
-    "Enter send · Shift+Enter newline · Alt+P commands · Alt+M mode · Alt+T todos · Alt+I interactive cursor · Ctrl+Q/Alt+Q quit · Ctrl+C cancel\n"
-    "Compatibility aliases: Ctrl+Shift+P commands · Ctrl+Shift+M mode · Ctrl+Shift+T todos · Ctrl+Shift+I interactive cursor\n"
+    "Enter send · Shift+Enter newline · Ctrl+Shift+P commands · Ctrl+Shift+M mode · Ctrl+Shift+T todos · Ctrl+Shift+I interactive cursor · Ctrl+Q quit · Ctrl+C cancel\n"
     "Permission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\n"
     "Type while a task is running to queue it; Ctrl+C cancels the current task."
 )
@@ -77,37 +76,16 @@ class PromptTextArea(TextArea):
     class CommandsRequested(Message):
         pass
 
-    class ShortcutRequested(Message):
-        def __init__(self, shortcut: str) -> None:
-            super().__init__(); self.shortcut = shortcut
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._alt_prefix = False
-
     class Submitted(Message):
         def __init__(self, textarea: "PromptTextArea") -> None:
             super().__init__(); self.text = textarea.text
     async def _on_key(self, event: events.Key) -> None:
-        shortcuts = {
-            "alt+p": "p", "ctrl+shift+p": "p",
-            "alt+m": "m", "ctrl+shift+m": "m",
-            "alt+t": "t", "ctrl+shift+t": "t",
-            "alt+i": "i", "ctrl+shift+i": "i",
-            "ctrl+q": "q", "alt+q": "q",
-        }
-        if event.key == "escape":
-            # Some terminals send Alt+X as two events: Escape followed by X.
-            self._alt_prefix = True
-            event.stop(); event.prevent_default(); return
-        shortcut = shortcuts.get(event.key)
-        if shortcut is None and self._alt_prefix:
-            self._alt_prefix = False
-            shortcut = {"p": "p", "m": "m", "t": "t", "i": "i", "q": "q"}.get(event.key)
-        elif shortcut is not None:
-            self._alt_prefix = False
-        if shortcut is not None:
-            event.stop(); event.prevent_default(); self.post_message(self.ShortcutRequested(shortcut)); return
+        # Some terminals encode Ctrl+Shift+P as the indistinguishable uppercase
+        # ``P`` key instead of the ``ctrl+shift+p`` name used by Textual bindings.
+        # Treat it as the command palette only when the prompt is empty; an
+        # uppercase P in an active prompt remains ordinary text.
+        if event.key == "ctrl+shift+p" and not self.text:
+            event.stop(); event.prevent_default(); self.post_message(self.CommandsRequested()); return
         if event.key == "enter":
             event.stop(); event.prevent_default(); self.post_message(self.Submitted(self)); return
         if event.key == "shift+enter":
@@ -308,11 +286,6 @@ class BoltpyApp(App[None]):
     BINDINGS = [
         ("ctrl+c", "cancel_operation", "Cancel operation"),
         ("ctrl+q", "quit", "Quit"),
-        ("alt+q", "quit", "Quit"),
-        ("alt+p", "show_commands", "Show commands"),
-        ("alt+m", "toggle_mode", "Change permission mode"),
-        ("alt+t", "toggle_todo", "Toggle todos"),
-        ("alt+i", "toggle_mouse", "Toggle interactive cursor"),
         ("ctrl+shift+p", "show_commands", "Show commands"),
         ("ctrl+shift+m", "toggle_mode", "Change permission mode"),
         ("ctrl+shift+t", "toggle_todo", "Toggle todos"),
@@ -415,13 +388,6 @@ class BoltpyApp(App[None]):
 
     def on_prompt_text_area_commands_requested(self, event: PromptTextArea.CommandsRequested) -> None:
         self.action_show_commands()
-
-    def on_prompt_text_area_shortcut_requested(self, event: PromptTextArea.ShortcutRequested) -> None:
-        actions = {"p": self.action_show_commands, "m": self.action_toggle_mode, "t": self.action_toggle_todo, "i": self.action_toggle_mouse}
-        if event.shortcut == "q":
-            self.exit()
-        elif action := actions.get(event.shortcut):
-            action()
 
     def action_toggle_mouse(self) -> None:
         self._set_mouse_mode("select" if self.mouse_mode == "interactive" else "interactive")

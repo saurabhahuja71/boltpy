@@ -20,10 +20,9 @@
 - Latest fix: Removed transcript tool cards to reduce noise; tool progress remains in the status bar. Removed the Ctrl+C hint from the middle status bar so the footer owns that control.
 - Latest fix: Every submitted user task now gets its own visible parent todo, including short prompts; it is completed after normal agent completion and remains open if execution fails or is cancelled.
 - Latest fix: Put `Ctrl+C` first in a compact footer and disabled the extra footer command-palette entry so the cancel shortcut remains visible in narrow terminals.
-- Latest fix: Added terminal-safe Alt shortcuts: `Alt+P` commands, `Alt+M` permission modes, `Alt+T` todos, `Alt+I` interactive cursor, and `Ctrl+Q`/`Alt+Q` quit. The prior Ctrl+Shift bindings remain compatibility aliases.
-- Latest fix: Routed Alt/Ctrl shortcut events directly from the focused prompt widget to TUI actions, avoiding framework footer-binding focus issues; added an interactive regression test.
-- Latest fix: Added Escape-then-letter handling for terminals that encode Alt shortcuts as two input events; the regression test covers both encodings.
+- Latest fix: Restored the known-good `68db9f0` shortcut set: `Ctrl+Shift+P/M/T/I`, `Ctrl+Q`, and `Ctrl+C`; removed the later Alt and Escape-prefix handling that caused shortcuts not to work reliably.
 - Latest fix: README now documents all tools, commands, shortcuts, permission modes, todo behavior, example prompts, provider setup, and optional `bolt-s1`/`bolt-s2` launchers.
 - Validation: Full pytest suite, compileall, and `git diff --check` pass.
 - Latest fix: Raised the agent tool-call loop ceiling from 8 to 16 iterations and broadened parent-todo detection for longer operational prompts.
 - Latest fix: Added remote-tool discipline guidance to the agent prompt to prevent bolt-s2 from retrying unrelated SSH/alias approaches or claiming unverified success.
+- Validation: Full pytest suite, project-environment compileall, and `git diff --check` pass after the shortcut rollback.

@@ -89,26 +89,6 @@ async def test_ctrl_shift_p_fallback_shows_commands_when_prompt_is_empty():
 
 
 @pytest.mark.asyncio
-async def test_alt_shortcuts_are_handled_by_prompt_widget():
-    app = BoltpyApp(Settings(api_key="test"))
-    async with app.run_test() as pilot:
-        await pilot.press("alt+p")
-        await pilot.pause()
-        assert "/help  show commands and controls" in str(app.query_one(ConversationLog).children[-1].render())
-        await pilot.press("alt+m")
-        assert app.permissions.mode.value == "allow"
-        panel = app.query_one("#todo-panel")
-        assert panel.display is True
-        await pilot.press("alt+t")
-        assert panel.display is False
-
-        # Terminals may encode Alt+P as Escape followed by P.
-        await pilot.press("escape")
-        await pilot.press("p")
-        await pilot.pause()
-        assert "/help  show commands and controls" in str(app.query_one(ConversationLog).children[-1].render())
-
-@pytest.mark.asyncio
 async def test_mouse_select_mode_releases_terminal_reporting_and_restores_it(monkeypatch):
     class DriverProbe:
         def __init__(self): self.calls = []
