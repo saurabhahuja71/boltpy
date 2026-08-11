@@ -158,10 +158,28 @@ def _ssh_target(host: str, user: str | None) -> str:
     if user and "@" in host: raise ValueError("Specify SSH user separately or as user@host, not both")
     return f"{user}@{host}" if user else host
 
+def _proxy_jump_for_host(host: str) -> str | None:
+    """Resolve a local SSH alias to its ProxyJump host."""
+    try:
+        bashrc = (Path.home() / ".bashrc").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    pattern = re.compile(
+        r"^\s*alias\s+\w+=['\"]ssh\s+-J\s+(\S+)\s+[^@'\"]+@"
+        + re.escape(host)
+        + r"['\"]\s*$",
+        re.MULTILINE,
+    )
+    match = pattern.search(bashrc)
+    return match.group(1) if match else None
+
 async def ssh(host: str, command: str, user: str | None = None, port: int | None = None, timeout: float = 30) -> ToolResult:
     """Run a non-interactive command using the system SSH client and SSH config."""
     _validate_ssh({"host": host, "command": command, "timeout": timeout}); started = time.perf_counter()
     args = ["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+    proxy_jump = _proxy_jump_for_host(host)
+    if proxy_jump:
+        args += ["-J", proxy_jump]
     if port is not None:
         if not 1 <= int(port) <= 65535: raise ValueError("SSH port must be between 1 and 65535")
         args += ["-p", str(int(port))]
