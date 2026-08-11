@@ -17,7 +17,7 @@ class Settings(BaseModel):
     temperature: float = Field(default=0.2, ge=0, le=2)
     system_prompt: str = "You are Boltpy, a helpful terminal coding assistant."
     permission_mode: Literal["ask", "allow", "plan"] = "ask"
-    theme: str = "dark"
+    theme: str = "light"
 
     def available_models(self) -> list[str]:
         """Return configured models with the active model first."""

@@ -27,11 +27,27 @@ _PLAN_GUIDANCE = (
     "switch to ask/allow mode with /mode to let you execute it."
 )
 
+_TODO_GUIDANCE = (
+    "\n\nTask tracking: For multi-step requests or work that will take more than one action, "
+    "create a concise todo for each meaningful step with add_todo before starting. "
+    "Use complete_todo immediately after a step is finished, update_todo if its scope "
+    "changes, and list_todos when you need to review the current plan. Do not create "
+    "todos for simple questions or one-step answers."
+)
+
+_TOOL_DISCIPLINE_GUIDANCE = (
+    "\n\nTool discipline: For remote work, use the ssh tool with the literal host, user, "
+    "and command; do not try to execute a shell alias such as podman9 on the remote host. "
+    "If a tool call fails, inspect its error, make at most one focused correction, and "
+    "then report the blocker instead of trying unrelated alternatives. Never claim an "
+    "operation succeeded unless a tool result confirms it."
+)
+
 class Agent:
     """History-aware agent supporting multiple tool calls and iterations."""
     def __init__(self, settings: Settings, provider: OpenAICompatibleProvider | None = None,
                  registry: ToolRegistry | None = None, permissions: PermissionManager | None = None,
-                 max_tool_iterations: int = 8) -> None:
+                 max_tool_iterations: int = 16) -> None:
         self.settings = settings
         self.provider = provider or OpenAICompatibleProvider(settings)
         self.messages: list[Message] = [{"role": "system", "content": settings.system_prompt}]
@@ -43,6 +59,10 @@ class Agent:
 
     def _system_prompt(self) -> str:
         content = self.settings.system_prompt
+        if _TODO_GUIDANCE not in content:
+            content += _TODO_GUIDANCE
+        if _TOOL_DISCIPLINE_GUIDANCE not in content:
+            content += _TOOL_DISCIPLINE_GUIDANCE
         if self.permissions.mode == PermissionMode.PLAN and _PLAN_GUIDANCE not in content:
             content += _PLAN_GUIDANCE
         return content

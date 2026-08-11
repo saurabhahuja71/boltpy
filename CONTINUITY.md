@@ -8,3 +8,20 @@
 - Validation: `uv run --dev pytest -q` passes 45 tests; compileall, CLI help, headless-import, and `git diff --check` pass.
 - Release: package version is 1.0.1; prior commits are pushed to `main`; GitHub `v1.0.0` and `v1.0.1` are published at https://github.com/saurabhahuja71/boltpy/releases/tag/v1.0.1.
 - Known limitations: SSH is non-interactive and uses the system client; Ollama does not report usage chunks (tokens are estimated); live provider validation depends on the configured endpoint/model and tool-call support.
+- Latest fix: The agent system prompt now explicitly directs multi-step tasks to use `add_todo`, `complete_todo`, `update_todo`, and `list_todos`, while avoiding todos for simple questions. This ensures the right-side panel is populated when the model is handling actionable multi-step work.
+- Validation: `UV_CACHE_DIR=/tmp/boltpy-uv-cache uv run --dev pytest -q tests/test_phase45.py tests/test_tools.py` passes (35 tests); `git diff --check` passes.
+- Latest fix: Added `Shift+P` to show the complete command and keyboard reference, sharing the same help content as `/help`.
+- Latest fix: Changed the mouse-mode shortcut to `Ctrl+Shift+M`.
+- Latest fix: The status bar now displays the current mouse mode.
+- Latest fix: Added a prompt-level fallback for terminals that report `Shift+P` as uppercase `P`, so the command palette opens while the prompt is empty.
+- Validation: Focused TUI tests pass (34 tests); `git diff --check` passes.
+- Latest fix: Changed the default theme to light in settings, TUI fallback initialization, and the configuration example.
+- Latest fix: Compacted the permission approval prompt into a borderless one-line terminal bar with small inline buttons.
+- Latest fix: Removed transcript tool cards to reduce noise; tool progress remains in the status bar. Removed the Ctrl+C hint from the middle status bar so the footer owns that control.
+- Latest fix: Every submitted user task now gets its own visible parent todo, including short prompts; it is completed after normal agent completion and remains open if execution fails or is cancelled.
+- Latest fix: Put `Ctrl+C` first in a compact footer and disabled the extra footer command-palette entry so the cancel shortcut remains visible in narrow terminals.
+- Latest fix: Final shortcuts are `Ctrl+Shift+P` commands, `Ctrl+Shift+M` permission modes, `Ctrl+Shift+T` todos, and `Ctrl+Shift+I` interactive cursor.
+- Latest fix: README now documents all tools, commands, shortcuts, permission modes, todo behavior, example prompts, provider setup, and optional `bolt-s1`/`bolt-s2` launchers.
+- Validation: Full pytest suite, compileall, and `git diff --check` pass.
+- Latest fix: Raised the agent tool-call loop ceiling from 8 to 16 iterations and broadened parent-todo detection for longer operational prompts.
+- Latest fix: Added remote-tool discipline guidance to the agent prompt to prevent bolt-s2 from retrying unrelated SSH/alias approaches or claiming unverified success.

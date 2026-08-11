@@ -2,7 +2,7 @@
 from __future__ import annotations
 import asyncio
 import json
-import time
+import re
 from pathlib import Path
 from rich.text import Text
 from textual import events, work
@@ -11,7 +11,7 @@ from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.message import Message
 from textual.theme import Theme
 from textual.widget import Widget
-from textual.widgets import Button, Collapsible, Footer, Header, Label, Markdown, OptionList, Static, TextArea
+from textual.widgets import Button, Footer, Header, Label, Markdown, OptionList, Static, TextArea
 from textual.widgets.option_list import Option
 from boltpy.agent.core import Agent
 from boltpy.agent.permissions import PermissionDecision, PermissionManager, PermissionMode, PermissionRequest
@@ -19,11 +19,40 @@ from boltpy.agent.todos import todo_store
 from boltpy.config import Settings
 
 _TODO_TOOLS = {"add_todo", "complete_todo", "update_todo", "list_todos"}
+_TASK_ACTIONS = re.compile(r"\b(check|find|list|tell|show|run|stop|start|create|update|fix|deploy|verify|remove|delete|build|test)\b", re.IGNORECASE)
+
+_HELP_TEXT = (
+    "[bold]Commands[/bold]\n"
+    "/help  show commands and controls\n"
+    "/mode  inspect permission mode\n"
+    "/mode ask|allow|plan  change permission mode\n"
+    "/theme dark|light  switch theme\n"
+    "/model  choose the active configured model\n"
+    "/todo  toggle the todo panel\n"
+    "/queue  list queued prompts\n"
+    "/permissions  list permanent approvals\n"
+    "/permissions remove <command>  remove an exact approval\n"
+    "/mouse interactive|select  widget mouse (default) or native selection\n"
+    "/new  start a new conversation\n"
+    "/quit  exit\n\n"
+    "[bold]Keys[/bold]\n"
+    "Enter send · Shift+Enter newline · Ctrl+Shift+P commands · Ctrl+Shift+M mode · Ctrl+Shift+T todos · Ctrl+Shift+I interactive cursor · Ctrl+Q quit · Ctrl+C cancel\n"
+    "Permission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\n"
+    "Type while a task is running to queue it; Ctrl+C cancels the current task."
+)
 
 
 def render_markdown(text: str) -> Markdown:
     """Create a streaming-friendly Textual Markdown widget for assistant content."""
     return Markdown(text)
+
+
+def _needs_task_todo(prompt: str) -> bool:
+    """Return whether a submitted user task needs a visible parent item."""
+    # The parent item is a UI task marker, distinct from model-created
+    # subtasks. Tracking every submitted task prevents short prompts from
+    # silently disappearing from the sidebar.
+    return bool(prompt.strip())
 
 
 class ConversationLog(VerticalScroll):
@@ -44,10 +73,19 @@ class ConversationLog(VerticalScroll):
 
 class PromptTextArea(TextArea):
     """Text area where Enter submits and Shift+Enter inserts a newline."""
+    class CommandsRequested(Message):
+        pass
+
     class Submitted(Message):
         def __init__(self, textarea: "PromptTextArea") -> None:
             super().__init__(); self.text = textarea.text
     async def _on_key(self, event: events.Key) -> None:
+        # Some terminals encode Shift+P as the indistinguishable uppercase
+        # ``P`` key instead of the ``shift+p`` name used by Textual bindings.
+        # Treat it as the command palette only when the prompt is empty; an
+        # uppercase P in an active prompt remains ordinary text.
+        if event.key == "ctrl+shift+p" and not self.text:
+            event.stop(); event.prevent_default(); self.post_message(self.CommandsRequested()); return
         if event.key == "enter":
             event.stop(); event.prevent_default(); self.post_message(self.Submitted(self)); return
         if event.key == "shift+enter":
@@ -77,7 +115,7 @@ class PermissionPrompt(Static):
         self._selected = 0
     def compose(self) -> ComposeResult:
         with Vertical(id="permission-content"):
-            yield Label("⚠ Permission required", id="permission-title")
+            yield Label("⚠ Permission", id="permission-title")
             yield Label("", id="permission-tool")
             yield Static("", id="permission-details", markup=False)
             with Horizontal(id="permission-buttons"):
@@ -90,7 +128,7 @@ class PermissionPrompt(Static):
         return [self.query_one(selector, Button) for selector in ("#allow-once", "#allow-session", "#allow-permanent", "#deny")]
     def _select(self, index: int) -> None:
         self._selected = index % 4
-        labels = ("Allow Once", "Allow Session", "Allow Permanently", "Deny")
+        labels = ("Once", "Session", "Always", "Deny")
         for position, button in enumerate(self._buttons()):
             button.label = ("▶ " if position == self._selected else "") + labels[position]
         self._buttons()[self._selected].focus()
@@ -246,23 +284,20 @@ class BoltpyApp(App[None]):
     CSS_PATH = "styles.tcss"
     TITLE = "Boltpy"
     BINDINGS = [
-        ("ctrl+q", "quit", "Quit"),
         ("ctrl+c", "cancel_operation", "Cancel operation"),
-        ("ctrl+m", "toggle_mouse", "Toggle mouse mode"),
-        ("ctrl+t", "toggle_todo", "Toggle todos"),
+        ("ctrl+q", "quit", "Quit"),
+        ("ctrl+shift+p", "show_commands", "Show commands"),
+        ("ctrl+shift+m", "toggle_mode", "Change permission mode"),
+        ("ctrl+shift+t", "toggle_todo", "Toggle todos"),
+        ("ctrl+shift+i", "toggle_mouse", "Toggle interactive cursor"),
     ]
 
     def __init__(self, settings: Settings) -> None:
-        super().__init__(); self.settings = settings; self.busy = False; self.theme_name = "dark"; self.mouse_mode = "interactive"
+        super().__init__(); self.settings = settings; self.busy = False; self.theme_name = "light"; self.mouse_mode = "interactive"
         self._prompt_queue: list[str] = []
         self._permission_future: asyncio.Future[PermissionDecision] | None = None
         self._options_future: asyncio.Future[str] | None = None
         self._model_prompt: ModelPrompt | None = None
-        self._tool_started: dict[str, float] = {}
-        self._tool_arguments: dict[str, dict[str, object]] = {}
-        self._tool_card_status: dict[str, Static] = {}
-        self._tool_card_result: dict[str, Static] = {}
-        self._tool_card: dict[str, Collapsible] = {}
         self._active_worker = None
         self.register_theme(Theme(
             "dark", primary="#58a6ff", secondary="#79c0ff", warning="#d29922", error="#f85149",
@@ -288,10 +323,12 @@ class BoltpyApp(App[None]):
             yield OptionsPrompt()
             yield Static("", id="status")
             yield PromptTextArea(placeholder="Ask Boltpy anything… (Enter to send, Shift+Enter for newline)", id="prompt")
-        yield Footer()
+        # Keep the cancel action first and compact so it remains visible in
+        # narrow terminals instead of scrolling off the footer.
+        yield Footer(show_command_palette=False, compact=True)
 
     def on_mount(self) -> None:
-        self._apply_theme(self.settings.theme if self.settings.theme in {"dark", "light"} else "dark")
+        self._apply_theme(self.settings.theme if self.settings.theme in {"dark", "light"} else "light")
         # Widget interaction is the default; switch to native terminal selection
         # explicitly when dragging to select/copy text is needed.
         self._set_mouse_mode("interactive")
@@ -316,12 +353,11 @@ class BoltpyApp(App[None]):
         provider = getattr(getattr(self.agent, "provider", None), "provider_name", "openai")
         tokens = getattr(getattr(self.agent, "provider", None), "total_tokens", 0)
         status = Text()
-        status.append(f"Boltpy | Mode: {self.permissions.mode.upper()} | Model: {provider}/{self.settings.model} | Tokens: {tokens}")
+        status.append(f"Boltpy | Mode: {self.permissions.mode.upper()} | Mouse: {self.mouse_mode.upper()} | Model: {provider}/{self.settings.model} | Tokens: {tokens}")
         if self.busy:
             status.append(" | ", style="dim")
             status.append("Processing…", style="blink bold")
             status.append(f"  {text}", style="dim")
-            status.append("   Ctrl+C to interrupt", style="yellow")
         else:
             status.append(f" | {text}")
         self.query_one("#status", Static).update(status)
@@ -345,6 +381,14 @@ class BoltpyApp(App[None]):
             self._set_status("Cancelling…")
             self._active_worker.cancel()
 
+    def action_show_commands(self) -> None:
+        """Show the complete command and keyboard reference."""
+        self._write(_HELP_TEXT, markup=True)
+        self.query_one("#prompt", PromptTextArea).focus()
+
+    def on_prompt_text_area_commands_requested(self, event: PromptTextArea.CommandsRequested) -> None:
+        self.action_show_commands()
+
     def action_toggle_mouse(self) -> None:
         self._set_mouse_mode("select" if self.mouse_mode == "interactive" else "interactive")
         self._set_status("Ready")
@@ -354,49 +398,12 @@ class BoltpyApp(App[None]):
         panel.display = not panel.display
         self._set_status("Ready")
 
-    def _tool_text(self, name: str, arguments: dict[str, object]) -> str:
-        if name == "run_shell": return f"$ {arguments.get('command', '')}"
-        if name == "ssh": return f"{arguments.get('user', '') + '@' if arguments.get('user') else ''}{arguments.get('host', '')}: {arguments.get('command', '')}"
-        if name == "http_request": return f"{arguments.get('method', 'GET')} {arguments.get('url', '')}"
-        return json.dumps(arguments, ensure_ascii=False, separators=(", ", ": "))
-
-    def _status_style(self, status: str) -> str:
-        if status in {"✓ completed", "approved"} or status.startswith("approved"):
-            return "success"
-        if "waiting" in status or status == "requested" or status == "running…":
-            return "warning"
-        return "error"
-
-    def _add_tool_card(self, name: str, arguments: dict[str, object], status: str) -> None:
-        elapsed = time.perf_counter() - self._tool_started.get(name, time.perf_counter())
-        status_widget = Static(f"{status} · {elapsed:.2f}s", classes=f"tool-status tool-status-{self._status_style(status)}")
-        result_widget = Static("", classes="tool-result")
-        body = Vertical(
-            Static(self._tool_text(name, arguments), classes="tool-args"),
-            status_widget,
-            result_widget,
-            classes="tool-card",
-        )
-        card = Collapsible(body, title=f"Tool: {name} — {status} · {elapsed:.2f}s", collapsed=True)
-        self._tool_card[name] = card
-        self._tool_card_status[name] = status_widget
-        self._tool_card_result[name] = result_widget
-        self._write(card)
-
-    def _update_tool_card(self, name: str, status: str, result: str = "") -> None:
-        status_widget = self._tool_card_status.get(name)
-        if status_widget is None:
-            self._add_tool_card(name, self._tool_arguments.get(name, {}), status)
-            status_widget = self._tool_card_status[name]
-        elapsed = time.perf_counter() - self._tool_started.get(name, time.perf_counter())
-        status_widget.update(f"{status} · {elapsed:.2f}s")
-        status_widget.set_classes(f"tool-status tool-status-{self._status_style(status)}")
-        card = self._tool_card.get(name)
-        if card is not None:
-            card.title = f"Tool: {name} — {status} · {elapsed:.2f}s"
-        if result:
-            summary = result if len(result) <= 700 else result[:697] + "…"
-            self._tool_card_result.get(name, Static("")).update(summary)
+    def action_toggle_mode(self) -> None:
+        """Cycle permission mode: ask, allow, plan."""
+        modes = (PermissionMode.ASK, PermissionMode.ALLOW, PermissionMode.PLAN)
+        current = self.permissions.mode
+        self.agent.set_permission_mode(modes[(modes.index(current) + 1) % len(modes)])
+        self._set_status(f"Mode: {self.permissions.mode.upper()}")
 
     async def _request_permission(self, request: PermissionRequest) -> PermissionDecision:
         """Await an inline widget decision without blocking Textual's UI."""
@@ -467,13 +474,13 @@ class BoltpyApp(App[None]):
                 return
             self._prompt_queue.append(prompt)
             self._write(f"[dim]Queued ({len(self._prompt_queue)} waiting): {prompt[:80]}{'…' if len(prompt) > 80 else ''}[/dim]", markup=True)
-            self._set_status(f"Queued ({len(self._prompt_queue)} waiting) — Ctrl+C to cancel")
+            self._set_status(f"Queued ({len(self._prompt_queue)} waiting)")
             return
         self.query_one("#prompt", PromptTextArea).text = ""
         if prompt == "/quit": self.exit()
         elif prompt == "/new": self.agent.reset(); self._write("[dim]Started a new conversation.[/dim]", markup=True)
         elif prompt == "/help":
-            self._write("[bold]Commands[/bold]\n/help  show commands and controls\n/mode  inspect permission mode\n/mode ask|allow|plan  change permission mode\n/theme dark|light  switch theme\n/model  choose the active configured model\n/todo  toggle the todo panel\n/queue  list queued prompts\n/permissions  list permanent approvals\n/permissions remove <command>  remove an exact approval\n/mouse interactive|select  widget mouse (default) or native selection\n/new  start a new conversation\n/quit  exit\n\n[bold]Keys[/bold]\nEnter send · Shift+Enter newline · Ctrl+Q quit · Ctrl+T todos · Ctrl+C cancel\nPermission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\nType while a task is running to queue it; Ctrl+C cancels the current task.", markup=True)
+            self.action_show_commands()
         elif prompt == "/model":
             self.query_one(ModelPrompt).present(await self._available_models(), self.settings.model)
         elif prompt == "/todo":
@@ -538,26 +545,31 @@ class BoltpyApp(App[None]):
 
     async def _run_prompt(self, prompt: str, transcript: ConversationLog) -> None:
         self._write(self._user_message(prompt)); answer_parts: list[str] = []
-        streaming = Markdown("", classes="assistant-streaming")
-        await transcript.log(streaming)
-        self._set_status("Thinking…")
-        async for event in self.agent.stream_events(prompt):
-            if event.kind == "text":
-                answer_parts.append(event.text); await streaming.update("".join(answer_parts)); transcript.scroll_to_end()
-            elif event.kind == "tool_call":
-                self._tool_started[event.name] = time.perf_counter(); self._tool_arguments[event.name] = event.arguments or {}
-                self._add_tool_card(event.name, event.arguments or {}, "running…")
-            elif event.kind == "permission" and event.status == "waiting":
-                self._update_tool_card(event.name, "waiting for permission"); self._set_status(f"Waiting for {event.name} approval…")
-            elif event.kind == "permission" and event.status != "waiting":
-                self._update_tool_card(event.name, "approved" if event.status in {"allow_once", "allow_session", "allow_permanent"} else "denied")
-            elif event.kind == "tool_result":
-                result = event.result; summary = result.display() if result else "unknown error"
-                if event.name in _TODO_TOOLS:
+        parent_todo = todo_store.add(f"Task: {prompt[:160]}{'…' if len(prompt) > 160 else ''}")
+        self.query_one(TodoPanel).refresh_todos()
+        finished = False
+        try:
+            streaming = Markdown("", classes="assistant-streaming")
+            await transcript.log(streaming)
+            self._set_status("Thinking…")
+            async for event in self.agent.stream_events(prompt):
+                if event.kind == "text":
+                    answer_parts.append(event.text); await streaming.update("".join(answer_parts)); transcript.scroll_to_end()
+                elif event.kind == "tool_call":
+                    self._set_status(f"Running {event.name}…")
+                elif event.kind == "permission" and event.status == "waiting":
+                    self._set_status(f"Waiting for {event.name} approval…")
+                elif event.kind == "permission" and event.status != "waiting":
+                    self._set_status(f"{event.name}: {event.status}")
+                elif event.kind == "tool_result" and event.name in _TODO_TOOLS:
                     self.query_one(TodoPanel).refresh_todos()
-                self._update_tool_card(event.name, "✓ completed" if result and result.ok else "✗ failed", summary)
-        if not answer_parts:
-            streaming.remove()
+            if not answer_parts:
+                streaming.remove()
+            finished = True
+        finally:
+            if finished:
+                todo_store.complete(parent_todo.id)
+            self.query_one(TodoPanel).refresh_todos()
         self._set_status("Ready")
 
     async def on_unmount(self) -> None: await self.agent.close()

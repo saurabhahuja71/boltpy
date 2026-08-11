@@ -20,7 +20,7 @@ model = "gpt-4o-mini"
 # Optional selector entries; the active model is always included.
 models = ["gpt-4o-mini", "local-model"]
 permission_mode = "ask"
-theme = "dark"
+theme = "light"
 ```
 
 Equivalent environment variables include `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `BOLTPY_PROVIDER`, `BOLTPY_MODELS` (comma-separated), `BOLTPY_PERMISSION_MODE`, and `BOLTPY_THEME`.
@@ -29,7 +29,7 @@ Equivalent environment variables include `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `O
 
 Boltpy uses a clean provider abstraction. Any OpenAI-compatible API (OpenAI, OpenRouter, xAI, DeepSeek, vLLM, SGLang…) works through `OpenAICompatibleProvider`; set `provider = "openai"` (or the service name) and optionally `base_url`. Local Ollama daemons use `provider = "ollama"` and need no API key — the provider points at `http://localhost:11434/v1` by default (override with `base_url` or `OLLAMA_BASE_URL`). Override either per-invocation with `--provider` and `--model`.
 
-## Tools and safe permissions
+## Tools, tasks, and safe permissions
 
 Boltpy’s reusable tool registry includes:
 
@@ -40,6 +40,8 @@ Boltpy’s reusable tool registry includes:
 - `http_request(method, url, headers, body, timeout)` — perform an HTTP(S) request with a bounded timeout and clear errors, useful for web APIs such as GitLab.
 - `add_todo` / `complete_todo` / `update_todo` / `list_todos` — maintain the live todo side panel.
 - `present_options(title, options)` — ask the user to pick from a numbered menu.
+
+For every submitted chat task, Boltpy adds a parent item to the live todo panel. Multi-step work can add subtasks with `add_todo`; completed items remain visible, while failed or cancelled parent tasks remain open for follow-up. Tool progress is shown in the status bar, without noisy tool cards in the transcript.
 
 Interactive mode defaults to `ask`: read-only tools run directly, while shell and SSH actions show an inline approval prompt. The prompt supports Allow Once, Allow Session, Allow Permanently, and Deny. Safety validation always runs before permission lookup, so a saved approval can never authorize a blocked catastrophic command.
 
@@ -60,7 +62,9 @@ Configure available model names with `models` or `BOLTPY_MODELS`, then use `/mod
 
 ## Terminal UI
 
-The TUI has a single chat transcript on the left with a collapsible todo side panel on the right; streaming text and tool cards all render into that one transcript, with the status bar and input at the bottom. It provides streaming Textual Markdown with syntax-highlighted fenced code, tables, lists, links, collapsible tool cards with running/success/failed/denied states, a CSS-variable theme system with dark/light themes, a live todo side panel (`Ctrl+T` or `/todo`), a numbered options picker with a typed answer, inline permission controls, a visible `CWD:` line at the top, and a status bar formatted as `Boltpy | Mode: ASK/ALLOW/PLAN | Model: provider/model | Tokens: n`. Useful commands:
+The TUI has a single chat transcript on the left with a collapsible todo side panel on the right; streaming text renders into the transcript, with the status bar and input at the bottom. It provides streaming Textual Markdown with syntax-highlighted fenced code, tables, lists, links, a CSS-variable theme system with light theme by default, a live todo side panel, a numbered options picker with a typed answer, inline permission controls, a visible `CWD:` line at the top, and a status bar formatted as `Boltpy | Mode: ASK/ALLOW/PLAN | Mouse: INTERACTIVE/SELECT | Model: provider/model | Tokens: n`.
+
+### Chat commands
 
 ```text
 /help
@@ -75,9 +79,47 @@ The TUI has a single chat transcript on the left with a collapsible todo side pa
 /quit
 ```
 
-Prompts sent while a task is running are queued and run in order when it finishes; the status bar shows the number waiting and `/queue` lists them. Ctrl+C cancels the current task and clears the queue.
+### Keyboard shortcuts
 
-Text selection and clipboard behavior remain terminal-native. Interactive mode is the default: mouse clicks and scrolling work on widgets such as permission/model buttons. Use `/mouse select` when you need native terminal selection — drag across conversation text and use the terminal’s copy/paste shortcuts, commonly Ctrl+Shift+C / Ctrl+Shift+V or Shift+Insert — then return with `/mouse interactive`; Ctrl+M toggles between both modes.
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+Shift+P` | Show all commands and shortcuts |
+| `Ctrl+Shift+M` | Cycle permission mode: ASK → ALLOW → PLAN |
+| `Ctrl+Shift+T` | Toggle the todo panel |
+| `Ctrl+Shift+I` | Toggle interactive cursor/mouse mode and native text selection |
+| `Ctrl+C` | Cancel the current task; queued prompts continue afterward |
+| `Ctrl+Q` | Quit |
+| `Enter` | Send the prompt |
+| `Shift+Enter` | Insert a newline |
+
+Prompts sent while a task is running are queued and run in order when it finishes; the status bar shows the number waiting and `/queue` lists them.
+
+Text selection and clipboard behavior remain terminal-native. Interactive cursor mode is the default: mouse clicks and scrolling work on widgets such as permission/model buttons. Use `/mouse select` or `Ctrl+Shift+I` when you need native terminal selection — drag across conversation text and use the terminal’s copy/paste shortcuts, commonly Ctrl+Shift+C / Ctrl+Shift+V or Shift+Insert — then return with `/mouse interactive` or `Ctrl+Shift+I`.
+
+### Example prompts
+
+Boltpy can handle direct questions, local project inspection, remote diagnostics, and API checks. Examples:
+
+```text
+Summarize the README and list the three most important setup steps.
+Inspect the current Git status and explain any uncommitted changes.
+Connect to podman9, list running containers, stop only racnode containers, and verify DNS remains running.
+Check the GitLab pipeline at this URL and report the failed job with its log summary.
+Read the deployment manifest and propose a plan without making changes.
+```
+
+For remote work, mention the host, user, and exact desired operation. Boltpy uses the system SSH client and asks before shell or SSH actions in `ask` mode.
+
+### Local launchers
+
+If your shell defines the optional backend helpers, the dedicated launchers can be used as follows:
+
+```bash
+bolt-s1 ask "inspect this project"   # Ollama backend
+bolt-s2 ask "inspect this project"   # SGLang backend
+```
+
+These aliases are environment-specific; standard Boltpy installations use `uv run boltpy` instead.
 
 ## SSH boundaries
 

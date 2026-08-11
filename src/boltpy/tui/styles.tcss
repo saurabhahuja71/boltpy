@@ -19,20 +19,20 @@ Screen { background: $background; color: $text; }
 .tool-status-error { color: $error; }
 .tool-result { height: auto; color: $text-muted; }
 
-#permission-prompt { display: none; width: 100%; height: auto; max-height: 12; padding: 1 2; margin: 0 1; border: round $warning; background: $panel; }
+#permission-prompt { display: none; width: 100%; height: auto; max-height: 7; padding: 0 1; margin: 0; border: none; background: transparent; }
 #permission-content { width: 100%; height: auto; }
 #permission-title { height: 1; text-style: bold; color: $warning; }
-#permission-tool { height: 1; padding-top: 1; text-style: bold; }
-#permission-details { height: auto; max-height: 5; padding: 1 1; color: $text; overflow-y: auto; }
-#permission-buttons { height: 3; width: 100%; layout: horizontal; align: left middle; }
-#permission-buttons Button { width: auto; min-width: 14; height: 3; margin: 0 1 0 0; border: tall transparent; text-style: bold; }
-#permission-buttons Button:hover { background: $primary-darken-1; color: $text; border: tall $primary; }
-#permission-buttons Button:focus { background: $primary; color: $foreground; border: tall $warning; text-style: bold underline; }
+#permission-tool { height: 1; text-style: bold; }
+#permission-details { height: auto; max-height: 2; padding: 0; color: $text; overflow-y: auto; }
+#permission-buttons { height: 1; width: 100%; layout: horizontal; align: left middle; }
+#permission-buttons Button { width: auto; min-width: 0; height: 1; margin: 0 1 0 0; padding: 0 1; border: none; text-style: bold; }
+#permission-buttons Button:hover { background: $primary-darken-1; color: $text; border: none; }
+#permission-buttons Button:focus { background: $primary; color: $foreground; border: none; text-style: bold underline; }
 #permission-buttons #allow-once:focus { background: $success; }
 #permission-buttons #allow-session:focus { background: $primary; }
 #permission-buttons #allow-permanent:focus { background: $warning; }
 #permission-buttons #deny:focus { background: $error; }
-#permission-help { height: 1; color: $text-muted; padding-top: 1; }
+#permission-help { height: 1; color: $text-muted; padding: 0; }
 
 #model-prompt { display: none; width: 100%; height: auto; max-height: 12; padding: 1 2; margin: 0 1; border: round $primary; background: $panel; }
 #model-content { width: 100%; height: auto; }

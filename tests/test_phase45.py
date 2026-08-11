@@ -10,7 +10,7 @@ from boltpy.agent.providers import OllamaProvider, OpenAICompatibleProvider, Pro
 from boltpy.agent.todos import todo_store
 from boltpy.agent.tools import default_registry, http_request
 from boltpy.config import Settings, load_settings
-from boltpy.tui.app import BoltpyApp, OptionsPrompt
+from boltpy.tui.app import BoltpyApp, OptionsPrompt, _needs_task_todo
 
 
 # --- Config ---
@@ -53,6 +53,23 @@ async def test_plan_mode_denies_capability_tools_and_allows_read_only():
 def test_plan_mode_adds_guidance_to_system_prompt():
     agent = Agent(Settings(api_key="k", permission_mode="plan"))
     assert "PLAN mode" in agent.messages[0]["content"]
+
+def test_system_prompt_explains_when_to_use_todos():
+    agent = Agent(Settings(api_key="k"))
+    prompt = agent.messages[0]["content"]
+    assert "add_todo" in prompt
+    assert "Do not create todos for simple questions" in prompt
+
+def test_system_prompt_sets_remote_tool_discipline():
+    agent = Agent(Settings(api_key="k"))
+    prompt = agent.messages[0]["content"]
+    assert "literal host, user, and command" in prompt
+    assert "Never claim an operation succeeded" in prompt
+
+def test_multi_action_prompts_get_automatic_task_tracking():
+    assert _needs_task_todo("go to podman9 and stop the containers")
+    assert _needs_task_todo("use the remote machine with the requested account and report the current service state")
+    assert _needs_task_todo("V")
 
 def test_set_permission_mode_updates_guidance():
     agent = Agent(Settings(api_key="k"))
@@ -200,6 +217,7 @@ async def test_status_bar_shows_provider_model_and_tokens():
         app._set_status("Ready")
         rendered = str(app.query_one("#status", Static).render())
         assert "Mode: ASK" in rendered
+        assert "Mouse: INTERACTIVE" in rendered
         assert "Model: openrouter/deepseek-r1" in rendered
         assert "Tokens: 42" in rendered
 
