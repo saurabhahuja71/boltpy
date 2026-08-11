@@ -102,6 +102,12 @@ async def test_alt_shortcuts_are_handled_by_prompt_widget():
         await pilot.press("alt+t")
         assert panel.display is False
 
+        # Terminals may encode Alt+P as Escape followed by P.
+        await pilot.press("escape")
+        await pilot.press("p")
+        await pilot.pause()
+        assert "/help  show commands and controls" in str(app.query_one(ConversationLog).children[-1].render())
+
 @pytest.mark.asyncio
 async def test_mouse_select_mode_releases_terminal_reporting_and_restores_it(monkeypatch):
     class DriverProbe:

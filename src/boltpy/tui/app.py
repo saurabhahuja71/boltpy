@@ -81,6 +81,10 @@ class PromptTextArea(TextArea):
         def __init__(self, shortcut: str) -> None:
             super().__init__(); self.shortcut = shortcut
 
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._alt_prefix = False
+
     class Submitted(Message):
         def __init__(self, textarea: "PromptTextArea") -> None:
             super().__init__(); self.text = textarea.text
@@ -92,7 +96,16 @@ class PromptTextArea(TextArea):
             "alt+i": "i", "ctrl+shift+i": "i",
             "ctrl+q": "q", "alt+q": "q",
         }
+        if event.key == "escape":
+            # Some terminals send Alt+X as two events: Escape followed by X.
+            self._alt_prefix = True
+            event.stop(); event.prevent_default(); return
         shortcut = shortcuts.get(event.key)
+        if shortcut is None and self._alt_prefix:
+            self._alt_prefix = False
+            shortcut = {"p": "p", "m": "m", "t": "t", "i": "i", "q": "q"}.get(event.key)
+        elif shortcut is not None:
+            self._alt_prefix = False
         if shortcut is not None:
             event.stop(); event.prevent_default(); self.post_message(self.ShortcutRequested(shortcut)); return
         if event.key == "enter":

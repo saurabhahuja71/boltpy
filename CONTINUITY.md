@@ -22,6 +22,7 @@
 - Latest fix: Put `Ctrl+C` first in a compact footer and disabled the extra footer command-palette entry so the cancel shortcut remains visible in narrow terminals.
 - Latest fix: Added terminal-safe Alt shortcuts: `Alt+P` commands, `Alt+M` permission modes, `Alt+T` todos, `Alt+I` interactive cursor, and `Ctrl+Q`/`Alt+Q` quit. The prior Ctrl+Shift bindings remain compatibility aliases.
 - Latest fix: Routed Alt/Ctrl shortcut events directly from the focused prompt widget to TUI actions, avoiding framework footer-binding focus issues; added an interactive regression test.
+- Latest fix: Added Escape-then-letter handling for terminals that encode Alt shortcuts as two input events; the regression test covers both encodings.
 - Latest fix: README now documents all tools, commands, shortcuts, permission modes, todo behavior, example prompts, provider setup, and optional `bolt-s1`/`bolt-s2` launchers.
 - Validation: Full pytest suite, compileall, and `git diff --check` pass.
 - Latest fix: Raised the agent tool-call loop ceiling from 8 to 16 iterations and broadened parent-todo detection for longer operational prompts.
