@@ -36,10 +36,12 @@ _TODO_GUIDANCE = (
 )
 
 _TOOL_DISCIPLINE_GUIDANCE = (
-    "\n\nTool discipline: For remote work, use the ssh tool with the literal host, user, "
-    "and command; do not try to execute a shell alias such as podman9 on the remote host. "
-    "For run_shell, the command argument must be executable command text such as `pwd` or "
-    "a literal ssh command resolved from the user’s local alias configuration; never put the current working-directory path "
+    "\n\nTool discipline: For remote work, use the ssh_execute tool with the literal host, user, "
+    "and command; do not try to execute a shell alias on the remote host. "
+    "For a Podman benchmark, use only the discovered aliases whose names end in digits; "
+    "run plain sudo podman ps -a, stop only currently running names, start those same names, "
+    "and verify with another plain listing. Never create, remove, replace, or rename containers. "
+    "For run_shell, never substitute local shell for a remote request. The current working-directory path "
     "in the command field. The working directory is already configured separately. "
     "If a tool call fails, inspect its error, make at most one focused correction, and "
     "then report the blocker instead of trying unrelated alternatives. Never claim an "
