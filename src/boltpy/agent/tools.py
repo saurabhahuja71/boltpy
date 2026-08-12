@@ -2,6 +2,7 @@
 from __future__ import annotations
 import asyncio
 import json
+import os
 import re
 import time
 from collections.abc import Awaitable, Callable
@@ -177,6 +178,8 @@ async def ssh(host: str, command: str, user: str | None = None, port: int | None
     """Run a non-interactive command using the system SSH client and SSH config."""
     _validate_ssh({"host": host, "command": command, "timeout": timeout}); started = time.perf_counter()
     args = ["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+    ssh_config = os.getenv("SSH_CONFIG_PATH") or str(Path.home() / ".ssh/config")
+    if Path(ssh_config).is_file(): args += ["-F", ssh_config]
     proxy_jump = _proxy_jump_for_host(host)
     if proxy_jump:
         args += ["-J", proxy_jump]
