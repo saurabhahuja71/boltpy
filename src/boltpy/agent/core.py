@@ -35,6 +35,12 @@ _TODO_GUIDANCE = (
     "todos for simple questions or one-step answers."
 )
 
+_CODING_GUIDANCE = (
+    "\n\nCoding discipline: Inspect and search before editing. Make the smallest targeted change, "
+    "preserve surrounding formatting, and validate edits with an appropriate available command. "
+    "Treat tool results as the source of truth. Never claim success without a successful tool result."
+)
+
 _TOOL_DISCIPLINE_GUIDANCE = (
     "\n\nTool discipline: For remote work, use the ssh_execute tool with the literal host, user, "
     "and command; do not try to execute a shell alias on the remote host. "
@@ -66,6 +72,8 @@ class Agent:
         content = self.settings.system_prompt
         if _TODO_GUIDANCE not in content:
             content += _TODO_GUIDANCE
+        if _CODING_GUIDANCE not in content:
+            content += _CODING_GUIDANCE
         if _TOOL_DISCIPLINE_GUIDANCE not in content:
             content += _TOOL_DISCIPLINE_GUIDANCE
         if self.permissions.mode == PermissionMode.PLAN and _PLAN_GUIDANCE not in content:
@@ -98,14 +106,24 @@ class Agent:
                 if iterations > self.max_tool_iterations:
                     raise RuntimeError(f"Tool-call loop exceeded {self.max_tool_iterations} iterations")
                 assistant_call_message: Message = {"role": "assistant", "content": "".join(text_parts), "tool_calls": []}
-                parsed_calls: list[tuple[ProviderEvent, dict[str, Any]]] = []
+                parsed_calls: list[tuple[ProviderEvent, dict[str, Any], str | None]] = []
                 for call in calls:
-                    arguments = parse_arguments(call.arguments)
-                    parsed_calls.append((call, arguments))
+                    try:
+                        arguments = parse_arguments(call.arguments)
+                        argument_error = None
+                    except ValueError as error:
+                        arguments = {}
+                        argument_error = str(error)
+                    parsed_calls.append((call, arguments, argument_error))
                     assistant_call_message["tool_calls"].append({"id": call.call_id, "type": "function", "function": {"name": call.name, "arguments": call.arguments}})
                     yield AgentEvent(kind="tool_call", name=call.name, arguments=arguments, status="requested")
                 self.messages.append(assistant_call_message)
-                for call, arguments in parsed_calls:
+                for call, arguments, argument_error in parsed_calls:
+                    if argument_error is not None:
+                        result = ToolResult(ok=False, error=argument_error)
+                        self.messages.append({"role": "tool", "tool_call_id": call.call_id, "content": result.as_message()})
+                        yield AgentEvent(kind="tool_result", name=call.name, result=result, status="failed")
+                        continue
                     try:
                         tool = self.registry.get(call.name)
                         tool.validate(arguments)

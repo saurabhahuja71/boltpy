@@ -185,8 +185,9 @@ class PermissionPrompt(Static):
         """Display a request and focus Allow Once."""
         self._request = request
         self.query_one("#permission-tool", Label).update(f"Tool: {request.tool_name}")
-        if request.tool_name == "run_shell": argument = "$ " + str(request.arguments.get("command", ""))
+        if request.tool_name in {"run_shell", "run_command"}: argument = "$ " + str(request.arguments.get("command", ""))
         elif request.tool_name == "ssh": argument = f"Host: {request.arguments.get('user', '') + '@' if request.arguments.get('user') else ''}{request.arguments.get('host', '')}\nCommand: {request.arguments.get('command', '')}"
+        elif request.tool_name == "edit_file": argument = f"File: {request.arguments.get('path', '')}\n- {request.arguments.get('old_text', '')}\n+ {request.arguments.get('new_text', '')}"
         elif len(request.arguments) == 1: argument = str(next(iter(request.arguments.values())))
         else: argument = json.dumps(request.arguments, ensure_ascii=False, separators=(", ", ": "))
         if len(argument) > 360: argument = argument[:357] + "…"

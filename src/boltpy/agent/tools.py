@@ -35,16 +35,27 @@ class ToolResult:
         """Alias useful to callers that prefer a success field."""
         return self.ok
 
-    def as_message(self) -> str:
-        """Format enough structured detail for a later model turn."""
+    def as_message(self, limit: int = 12000) -> str:
+        """Format structured, bounded detail for a later model turn."""
+        def bounded(value: str) -> tuple[str, bool]:
+            if len(value) <= limit:
+                return value, False
+            head = max(1, int(limit * 0.7))
+            tail = max(1, limit - head)
+            return f"{value[:head]}\n…[truncated; last portion follows]…\n{value[-tail:]}", True
+
         lines = [f"success: {self.ok}"]
         if self.exit_code is not None: lines.append(f"exit_code: {self.exit_code}")
         if self.duration: lines.append(f"duration: {self.duration:.2f}s")
         if self.timed_out: lines.append("timed_out: true")
         if self.cancelled: lines.append("cancelled: true")
         if self.error: lines.append(f"error: {self.error}")
-        if self.stdout: lines.append(f"stdout:\n{self.stdout}")
-        if self.stderr: lines.append(f"stderr:\n{self.stderr}")
+        if self.stdout:
+            stdout, truncated = bounded(self.stdout)
+            lines.append(f"stdout{' (truncated)' if truncated else ''}:\n{stdout}")
+        if self.stderr:
+            stderr, truncated = bounded(self.stderr)
+            lines.append(f"stderr{' (truncated)' if truncated else ''}:\n{stderr}")
         if not self.stdout and not self.stderr and self.output: lines.append(self.output)
         return "\n".join(lines)
 
@@ -70,7 +81,7 @@ class Tool:
     def permission_request(self, arguments: dict[str, Any]) -> PermissionRequest | None:
         if not self.capability: return None
         level = self.permission_level
-        if self.name in {"run_shell", "ssh", "ssh_execute"} and any(re.search(pattern, str(arguments.get("command", "")), re.IGNORECASE) for pattern in _DANGEROUS_COMMANDS):
+        if self.name in {"run_shell", "run_command", "ssh", "ssh_execute"} and any(re.search(pattern, str(arguments.get("command", "")), re.IGNORECASE) for pattern in _DANGEROUS_COMMANDS):
             level = PermissionLevel.DANGEROUS
         return PermissionRequest(self.name, self.capability, arguments, level)
     def validate(self, arguments: dict[str, Any]) -> None:
@@ -94,7 +105,7 @@ class ToolRegistry:
             tool = self.get(name)
             tool.validate(arguments)
             call_arguments = dict(arguments)
-            if self.output_handler is not None and name == "run_shell":
+            if self.output_handler is not None and name in {"run_shell", "run_command"}:
                 call_arguments["on_output"] = self.output_handler
             result = tool.function(**call_arguments)
             if asyncio.iscoroutine(result): result = await result
@@ -177,12 +188,12 @@ async def _communicate(process: asyncio.subprocess.Process, timeout: float, on_o
         raise
 
 
-async def run_shell(command: str, timeout: float = 30, on_output: OutputHandler | None = None) -> ToolResult:
+async def run_shell(command: str, timeout: float = 30, on_output: OutputHandler | None = None, cwd: str | os.PathLike[str] | None = None) -> ToolResult:
     """Run a bounded shell command while publishing output incrementally."""
     validate_shell_command(command)
     _validate_timeout(timeout)
     started = time.perf_counter()
-    process = await asyncio.create_subprocess_shell(command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    process = await asyncio.create_subprocess_shell(command, cwd=str(cwd) if cwd is not None else None, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     stdout, stderr, timed_out = await _communicate(process, timeout, on_output)
     duration = time.perf_counter() - started
     out = stdout.decode("utf-8", errors="replace").strip()
@@ -307,7 +318,12 @@ def default_registry(root: str | os.PathLike[str] = ".") -> ToolRegistry:
     registry = ToolRegistry()
     from boltpy.agent.coding import Workspace, coding_registry
     coding_registry(registry, Workspace(root))
-    registry.register(Tool("run_shell", "Run a local shell command when permitted.", {"type": "object", "properties": {"command": {"type": "string"}, "timeout": {"type": "number", "default": 30}}, "required": ["command"]}, run_shell, capability="shell.execute", validator=lambda args: (validate_shell_command(args.get("command", "")), _validate_timeout(float(args.get("timeout", 30)))), permission_level=PermissionLevel.CONFIRM))
+    shell_schema = {"type": "object", "properties": {"command": {"type": "string"}, "timeout": {"type": "number", "default": 30}}, "required": ["command"]}
+    shell_validator = lambda args: (validate_shell_command(args.get("command", "")), _validate_timeout(float(args.get("timeout", 30))))
+    workspace_root = Workspace(root).root
+    run_command = lambda command, timeout=30, on_output=None: run_shell(command, timeout, on_output, cwd=workspace_root)
+    registry.register(Tool("run_command", "Run a local shell command in the workspace when permitted.", shell_schema, run_command, capability="shell.execute", validator=shell_validator, permission_level=PermissionLevel.CONFIRM))
+    registry.register(Tool("run_shell", "Compatibility alias for run_command.", shell_schema, run_command, capability="shell.execute", validator=shell_validator, permission_level=PermissionLevel.CONFIRM))
     ssh_schema = {"type": "object", "properties": {"host": {"type": "string", "description": "SSH config alias, for example podman8 or podman9"}, "command": {"type": "string"}, "user": {"type": "string"}, "port": {"type": "integer"}, "timeout": {"type": "number", "default": 30}}, "required": ["host", "command"]}
     # Keep the old name for compatibility, but expose the benchmark contract
     # explicitly.  A model cannot call ssh_execute if it is not in the schema.

@@ -121,7 +121,7 @@ class PermissionManager:
 
     @staticmethod
     def _scope(request: PermissionRequest) -> tuple[str, str]:
-        if request.tool_name == "run_shell":
+        if request.tool_name in {"run_shell", "run_command"}:
             return "commands", str(request.arguments.get("command", ""))
         if request.tool_name == "ssh":
             values = (request.arguments.get("host", ""), request.arguments.get("user", ""), request.arguments.get("port", ""), request.arguments.get("command", ""))

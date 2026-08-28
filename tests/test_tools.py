@@ -44,7 +44,7 @@ async def test_shell_blocks_destructive_command():
 
 def test_default_registry_has_expected_schemas():
     names = [schema["function"]["name"] for schema in default_registry().schemas()]
-    assert names == ["read_file", "list_dir", "list_directory", "write_file", "create_file", "edit_file", "find_files", "search_files", "git_status", "git_diff", "git_log", "run_shell", "ssh_execute", "ssh", "http_request", "present_options", "add_todo", "complete_todo", "update_todo", "list_todos"]
+    assert names == ["read_file", "list_dir", "list_directory", "write_file", "create_file", "edit_file", "find_files", "search_files", "git_status", "git_diff", "git_log", "run_command", "run_shell", "ssh_execute", "ssh", "http_request", "present_options", "add_todo", "complete_todo", "update_todo", "list_todos"]
 
 @pytest.mark.asyncio
 async def test_allow_session_grant_is_reused_by_capability():
@@ -53,7 +53,7 @@ async def test_allow_session_grant_is_reused_by_capability():
         requests.append(request)
         return PermissionDecision.ALLOW_SESSION
     manager = PermissionManager(handler=handler)
-    request = default_registry().get("run_shell").permission_request({"command": "echo hi"})
+    request = default_registry().get("run_command").permission_request({"command": "echo hi"})
     assert request is not None
     assert await manager.authorize(request) == PermissionDecision.ALLOW_SESSION
     assert await manager.authorize(request) == PermissionDecision.ALLOW_SESSION
@@ -122,3 +122,30 @@ async def test_ssh_safety_rejection_happens_before_permission():
     assert not result.success
     assert "destructive" in result.error
     assert requests == []
+
+
+def test_workspace_tools_are_bounded_and_safe(tmp_path):
+    from boltpy.agent.coding import Workspace, edit_file, read_file, search_files
+    workspace = Workspace(tmp_path)
+    target = tmp_path / "config.yaml"
+    target.write_text("serviceType: ClusterIP\n" + "padding: x\n" * 250, encoding="utf-8")
+    result = read_file("config.yaml", workspace)
+    assert "Lines 1-200 of 251" in result and "truncated" in result
+    assert "config.yaml:1:serviceType: ClusterIP" in search_files("ClusterIP", ".", workspace)
+    assert "one replacement" in edit_file("config.yaml", "serviceType: ClusterIP", "serviceType: NodePort", workspace)
+    with pytest.raises(PermissionError): read_file("../outside", workspace)
+
+
+def test_tool_result_bounds_large_model_context():
+    from boltpy.agent.tools import ToolResult
+    result = ToolResult(ok=True, stdout="first\n" + "x" * 20000 + "\nlast")
+    message = result.as_message(limit=1000)
+    assert len(message) < 1300
+    assert "first" in message and "last" in message and "truncated" in message
+
+
+@pytest.mark.asyncio
+async def test_run_command_uses_registry_workspace(tmp_path):
+    result = await default_registry(tmp_path).execute("run_command", {"command": "pwd"})
+    assert result.success
+    assert str(tmp_path) in result.stdout
