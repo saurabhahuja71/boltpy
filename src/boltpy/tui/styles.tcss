@@ -6,7 +6,7 @@ Screen { background: $background; color: $text; }
 #status { height: 1; color: $text-muted; padding: 0 1; }
 #prompt { height: 4; min-height: 3; max-height: 8; border: round $success; background: $panel; padding: 0 1; }
 
-#todo-panel { width: 30; height: 100%; margin-left: 1; border: round $border; background: $surface; padding: 1 1; overflow-y: auto; }
+#todo-panel { width: 30; height: auto; min-height: 3; max-height: 12; margin-left: 1; border: round $border; background: $surface; padding: 1 1; overflow-y: auto; }
 
 .system-message { padding: 0 1 0 0; height: auto; margin-bottom: 1; }
 .assistant-streaming { height: auto; margin: 0 0 1 0; padding: 0 1; border: none; }

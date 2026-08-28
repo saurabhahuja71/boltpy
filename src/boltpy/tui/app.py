@@ -349,6 +349,8 @@ class BoltApp(App[None]):
         self._model_prompt: ModelPrompt | None = None
         self._active_worker = None
         self._current_activity: ToolActivity | None = None
+        self._status_state = "ready"
+        self._status_detail = "Ready"
         self.register_theme(Theme(
             "dark", primary="#58a6ff", secondary="#79c0ff", warning="#d29922", error="#f85149",
             success="#3fb950", accent="#58a6ff", foreground="#e6edf3", background="#101318",
@@ -406,16 +408,25 @@ class BoltApp(App[None]):
             self._current_activity.append_live(chunk, is_stderr)
 
     def _set_status(self, text: str) -> None:
+        """Render one authoritative execution state, never contradictory flags."""
+        self._status_detail = text
+        lowered = text.casefold()
+        if "error" in lowered:
+            self._status_state = "error"
+        elif "waiting" in lowered or "approval" in lowered:
+            self._status_state = "waiting"
+        elif self.busy:
+            self._status_state = "processing"
+        else:
+            self._status_state = "ready"
         provider = getattr(getattr(self.agent, "provider", None), "provider_name", "openai")
         tokens = getattr(getattr(self.agent, "provider", None), "total_tokens", 0)
-        status = Text()
-        status.append(f"Bolt | Mode: {self.permissions.mode.upper()} | Mouse: {self.mouse_mode.upper()} | Model: {provider}/{self.settings.model} | Tokens: {tokens}")
-        if self.busy:
-            status.append(" | ", style="dim")
-            status.append("Processing…", style="blink bold")
-            status.append(f"  {text}", style="dim")
-        else:
-            status.append(f" | {text}")
+        labels = {"ready": "Ready", "processing": "Processing", "waiting": "Waiting", "error": "Error"}
+        styles = {"ready": "", "processing": "bold", "waiting": "yellow", "error": "red"}
+        status = Text(f"Bolt | Mode: {self.permissions.mode.upper()} | Mouse: {self.mouse_mode.upper()} | Model: {provider}/{self.settings.model} | Tokens: {tokens} | ")
+        status.append(labels[self._status_state], style=styles[self._status_state])
+        if text and text.casefold() not in {"ready", "processing", "waiting"}:
+            status.append(f": {text}", style="dim" if self._status_state != "error" else "red")
         self.query_one("#status", Static).update(status)
 
     def _set_mouse_mode(self, mode: str) -> None:
@@ -651,7 +662,7 @@ class BoltApp(App[None]):
                     if activities:
                         activity = next((item for item in reversed(activities) if item.name == event.name), activities[-1])
                         result = event.result
-                        activity.set_status("success" if result and result.ok else "failed", result.display(limit=180) if result else "")
+                        activity.set_status("success" if result and result.ok else "failed", result.display(limit=12000) if result else "")
                         self._current_activity = None
                     if event.name in _TODO_TOOLS:
                         self.query_one(TodoPanel).refresh_todos()
