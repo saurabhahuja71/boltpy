@@ -4,13 +4,27 @@ Bolt is a fast, keyboard-first terminal AI agent for inspecting projects, runnin
 
 Built for developers who want a practical AI assistant in the terminal—not a web dashboard.
 
-## Quick start
+
+## Install Bolt
+
+Install for the current user with:
 
 ```bash
-uv run bolt
-uv run bolt ask "What is 2+2?"
-uv run bolt exec "summarize the README"
+curl -fsSL https://raw.githubusercontent.com/saurabhahuja71/boltpy/main/install.sh | bash
 ```
+
+The installer uses an isolated environment under ~/.local/share/bolt and places the command in ~/.local/bin. It does not require sudo.
+
+## Usage
+
+bolt
+bolt .
+bolt /path/to/project
+bolt --model qwen3-coder
+bolt --provider ollama --endpoint http://localhost:11434
+bolt doctor
+
+For development, use pip install -e . or uv run bolt.
 
 Set `OPENAI_API_KEY` for OpenAI or point `OPENAI_BASE_URL` at an OpenAI-compatible service. Bolt reads configuration in this order: defaults, `~/.config/boltpy/config.toml`, local `bolt.toml`, then environment variables.
 

@@ -634,6 +634,7 @@ class BoltApp(App[None]):
         finally:
             self.busy = False
             self._active_worker = None
+            self._set_status("Ready")
             self.query_one("#prompt", PromptTextArea).focus()
 
     async def _run_prompt(self, prompt: str, transcript: ConversationLog) -> None:

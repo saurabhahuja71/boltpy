@@ -335,6 +335,7 @@ async def test_prompts_queue_while_busy_and_run_in_order():
         await app._active_worker.wait()
         assert fake.runs == ["first", "second", "third"]
         assert not app.busy
+        assert app._status_state == "ready"
 
 @pytest.mark.asyncio
 async def test_interrupt_cancels_running_worker_but_keeps_queue():
@@ -368,3 +369,18 @@ async def test_queue_command_lists_queued_prompts():
         rendered = " ".join(str(widget.render()) for widget in app.query("#transcript .system-message"))
         assert "1. alpha" in rendered
         assert "2. beta" in rendered
+
+
+def test_cli_version_and_short_help():
+    result = CliRunner().invoke(cli.app, ["--version"])
+    assert result.exit_code == 0
+    assert result.stdout.startswith("Bolt ")
+    result = CliRunner().invoke(cli.app, ["-h"])
+    assert result.exit_code == 0
+    assert "A terminal coding agent" in result.stdout
+
+
+def test_cli_rejects_invalid_workspace():
+    result = CliRunner().invoke(cli.app, ["--project", "/path/that/does/not/exist"])
+    assert result.exit_code == 2
+    assert "workspace does not exist" in result.stdout
