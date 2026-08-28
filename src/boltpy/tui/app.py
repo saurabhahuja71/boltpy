@@ -322,10 +322,10 @@ class TodoPanel(Static):
         text.append(f"Todos ({open_count} open)\n", style="bold")
         if not todos:
             text.append("(none)")
-        for todo in todos:
+        for number, todo in enumerate(todos, 1):
             mark = "[x]" if todo.completed else "[ ]"
             style = "dim" if todo.completed else ""
-            text.append(f"{mark} {todo.id}. {todo.description}\n", style=style)
+            text.append(f"{mark} {number}. {todo.description}\n", style=style)
         self.update(text)
 
 

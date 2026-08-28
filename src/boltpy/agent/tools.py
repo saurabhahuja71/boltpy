@@ -291,7 +291,7 @@ def add_todo(description: str) -> str:
     if not isinstance(description, str) or not description.strip():
         raise ValueError("Todo description cannot be empty")
     todo = todo_store.add(description)
-    return f"added todo {todo.id}: {todo.description}"
+    return json.dumps({"id": todo.id, "content": todo.description})
 
 def complete_todo(todo_id: str) -> str:
     """Mark a todo item as completed."""

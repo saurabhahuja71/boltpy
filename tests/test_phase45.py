@@ -91,14 +91,19 @@ def clean_todos():
 @pytest.mark.asyncio
 async def test_todo_tools_add_complete_and_list():
     registry = default_registry()
+    import json
     added = await registry.execute("add_todo", {"description": "fix the bug"})
     assert added.ok and "fix the bug" in added.output
+    todo_id = json.loads(added.output)["id"]
+    assert todo_id.startswith("todo_")
     listed = await registry.execute("list_todos", {})
-    assert listed.ok and "[ ] 1. fix the bug" in listed.output
-    completed = await registry.execute("complete_todo", {"todo_id": "1"})
+    assert listed.ok and f"[ ] {todo_id}. fix the bug" in listed.output
+    updated = await registry.execute("update_todo", {"todo_id": todo_id, "description": "updated bug"})
+    assert updated.ok and todo_id in updated.output
+    completed = await registry.execute("complete_todo", {"todo_id": todo_id})
     assert completed.ok
     listed = await registry.execute("list_todos", {})
-    assert "[x] 1. fix the bug" in listed.output
+    assert f"[x] {todo_id}. updated bug" in listed.output
 
 
 # --- HTTP tool ---
@@ -255,7 +260,7 @@ async def test_todo_panel_renders_open_and_completed_items():
     async with app.run_test():
         todo_store.add("first")
         todo_store.add("second")
-        todo_store.complete("1")
+        todo_store.complete(todo_store.items()[0].id)
         panel = app.query_one("#todo-panel", Static)
         panel.refresh_todos()
         rendered = str(panel.render())
@@ -383,4 +388,19 @@ def test_cli_version_and_short_help():
 def test_cli_rejects_invalid_workspace():
     result = CliRunner().invoke(cli.app, ["--project", "/path/that/does/not/exist"])
     assert result.exit_code == 2
-    assert "workspace does not exist" in result.stdout
+    assert "workspace does not exist" in result.output
+
+
+@pytest.mark.asyncio
+async def test_multiple_todos_complete_out_of_order():
+    import json
+    registry = default_registry()
+    ids = [json.loads((await registry.execute("add_todo", {"description": f"step {i}"})).output)["id"] for i in range(4)]
+    assert len(set(ids)) == 4
+    assert await registry.execute("update_todo", {"todo_id": ids[1], "description": "updated step"})
+    assert await registry.execute("complete_todo", {"todo_id": ids[3]})
+    assert await registry.execute("complete_todo", {"todo_id": ids[0]})
+    assert await registry.execute("complete_todo", {"todo_id": ids[2]})
+    invalid = await registry.execute("update_todo", {"todo_id": "todo_1", "description": "invalid"})
+    assert not invalid.ok and "todo_1" in invalid.error
+    assert todo_store.open_count() == 1

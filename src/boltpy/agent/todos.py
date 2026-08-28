@@ -1,6 +1,7 @@
 """Shared live todo list used by agent tools and the TUI side panel."""
 from __future__ import annotations
 import time
+import uuid
 from dataclasses import dataclass, field
 
 @dataclass
@@ -18,8 +19,7 @@ class TodoStore:
         self._next_id = 1
 
     def add(self, description: str) -> Todo:
-        todo = Todo(id=str(self._next_id), description=description.strip())
-        self._next_id += 1
+        todo = Todo(id=f"todo_{uuid.uuid4().hex[:12]}", description=description.strip())
         self._todos.append(todo)
         return todo
 

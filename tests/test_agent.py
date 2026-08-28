@@ -57,3 +57,40 @@ async def test_agent_real_search_edit_validate_and_diff_workflow(tmp_path):
     assert all(event.result and event.result.success for event in results)
     assert (tmp_path / "config.yaml").read_text(encoding="utf-8") == "serviceType: NodePort\n"
     assert "+serviceType: NodePort" in results[-1].result.output
+
+
+class TodoWorkflowProvider:
+    def __init__(self):
+        self.turn = 0
+        self.seen_id = None
+
+    async def stream_response(self, messages, tools):
+        if self.turn == 0:
+            self.turn += 1
+            yield ProviderEvent("tool_call", call_id="add", name="add_todo", arguments='{"description":"inspect config"}')
+        elif self.turn == 1:
+            self.turn += 1
+            payload = messages[-1]["content"].split("\n", 1)[1]
+            import json
+            self.seen_id = json.loads(payload)["id"]
+            yield ProviderEvent("tool_call", call_id="complete", name="complete_todo", arguments=json.dumps({"todo_id": self.seen_id}))
+        else:
+            yield ProviderEvent("text", text="Todo completed.")
+
+    async def close(self):
+        pass
+
+
+@pytest.mark.asyncio
+async def test_agent_uses_returned_todo_id():
+    from boltpy.agent.todos import todo_store
+    todo_store.clear()
+    provider = TodoWorkflowProvider()
+    agent = Agent(Settings(), provider=provider)
+    events = [event async for event in agent.stream_events("track this task")]
+    results = [event for event in events if event.kind == "tool_result"]
+    assert [event.name for event in results] == ["add_todo", "complete_todo"]
+    assert all(event.result and event.result.success for event in results)
+    assert provider.seen_id and provider.seen_id.startswith("todo_") and provider.seen_id != "todo_1"
+    assert todo_store.get(provider.seen_id).completed
+    todo_store.clear()

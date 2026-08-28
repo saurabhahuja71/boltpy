@@ -5,6 +5,72 @@ Bolt is a fast, keyboard-first terminal AI agent for inspecting projects, runnin
 Built for developers who want a practical AI assistant in the terminal—not a web dashboard.
 
 
+## Local & Self-Hosted Models
+
+Bolt is a local-first coding agent designed to work with local and self-hosted LLM inference servers. Your code and prompts can stay within infrastructure you control.
+
+Supported backends include:
+
+- **Ollama**
+  - Local Ollama servers
+  - Remote Ollama servers
+
+- **SGLang**
+  - Local SGLang servers
+  - Remote SGLang servers
+  - OpenAI-compatible API endpoints
+
+- **Other OpenAI-compatible inference servers** where compatible with Bolt's provider implementation, including compatible vLLM, LM Studio, and similar deployments.
+
+Bolt is not dependent on a cloud LLM provider. You can run it against your own workstation, a private server, or remote inference infrastructure on your network.
+
+### Ollama
+
+Local Ollama:
+
+```bash
+bolt --provider ollama \
+  --endpoint http://localhost:11434 \
+  --model qwen3-coder
+```
+
+Remote Ollama:
+
+```bash
+bolt --provider ollama \
+  --endpoint http://ollama.internal:11434 \
+  --model qwen3-coder
+```
+
+You can also configure Ollama with `OLLAMA_HOST`, `OLLAMA_BASE_URL`, or a Bolt config file. Bolt discovers models from the configured Ollama server with `bolt models`.
+
+### SGLang
+
+Local SGLang with its OpenAI-compatible endpoint:
+
+```bash
+bolt --provider sglang \
+  --endpoint http://localhost:30000/v1 \
+  --model Qwen/Qwen3-Coder
+```
+
+Remote SGLang:
+
+```bash
+bolt --provider sglang \
+  --endpoint http://inference.internal:30000/v1 \
+  --model Qwen/Qwen3-Coder
+```
+
+For an OpenAI-compatible self-hosted server, point `--endpoint` at its compatible `/v1` API endpoint and select the provider name used by your configuration:
+
+```bash
+bolt --provider my-server \
+  --endpoint http://inference.internal:8000/v1 \
+  --model my-coding-model
+```
+
+
 ## Install Bolt
 
 Install for the current user with:
