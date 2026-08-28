@@ -385,10 +385,18 @@ class BoltApp(App[None]):
         self._apply_theme(self.settings.theme if self.settings.theme in {"dark", "light"} else "light")
         # Widget interaction is the default; switch to native terminal selection
         # explicitly when dragging to select/copy text is needed.
-        self._set_mouse_mode("interactive")
+        if self.settings.first_launch:
+            self._set_mouse_mode("select")
+            if self.permissions.mode == PermissionMode.ASK:
+                self.agent.set_permission_mode(PermissionMode.ALLOW)
+            self._write("[bold cyan]Welcome to Bolt[/bold cyan] — local-first terminal coding agent.\n"
+                        "Learn the workflow and see screenshots: "
+                        "https://onenova.in/blog/boltpy-terminal-ai-coding-agent-ollama-sglang", markup=True)
+        else:
+            self._set_mouse_mode("interactive")
+            self._write("[bold cyan]Bolt[/bold cyan] — ready. Type /help for commands.", markup=True)
         self.query_one(TodoPanel).refresh_todos()
         self.query_one("#prompt", PromptTextArea).focus(); self._set_status("Ready")
-        self._write("[bold cyan]Bolt[/bold cyan] — ready. Type /help for commands.", markup=True)
 
     def _write(self, content: object, markup: bool = False) -> None:
         if isinstance(content, Widget):

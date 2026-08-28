@@ -139,3 +139,13 @@ async def test_model_selector_discovers_ollama_models(monkeypatch):
     monkeypatch.setattr(app.agent.provider, "list_models", list_models)
     async with app.run_test():
         assert await app._available_models() == ["configured", "qwen3-coder:30b", "veriloop-coder-e1:latest"]
+
+
+@pytest.mark.asyncio
+async def test_first_launch_uses_select_and_allow_defaults():
+    app = BoltpyApp(Settings(api_key="test", first_launch=True))
+    async with app.run_test():
+        assert app.mouse_mode == "select"
+        assert app.permissions.mode.value == "allow"
+        rendered = " ".join(str(widget.render()) for widget in app.query("#transcript .system-message"))
+        assert "onenova.in/blog/boltpy-terminal-ai-coding-agent-ollama-sglang" in rendered

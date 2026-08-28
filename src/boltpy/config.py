@@ -19,6 +19,7 @@ class Settings(BaseModel):
     permission_mode: Literal["ask", "allow", "plan"] = "ask"
     theme: str = "light"
     workspace: Path = Field(default_factory=Path.cwd)
+    first_launch: bool = False
 
     def available_models(self) -> list[str]:
         """Return configured models with the active model first."""
@@ -60,6 +61,9 @@ def load_settings() -> Settings:
             values[field_name] = [item.strip() for item in value.split(",") if item.strip()] if field_name == "models" else value
     settings = Settings(**values)
     settings.workspace = settings.workspace.expanduser().resolve()
+    session_marker = settings.workspace / ".bolt" / "sessions" / "latest.json"
+    explicitly_configured = "permission_mode" in values
+    settings.first_launch = not session_marker.is_file() and not explicitly_configured
     return settings
 
 def require_api_key(settings: Settings) -> str:
