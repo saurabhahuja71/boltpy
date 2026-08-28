@@ -393,7 +393,7 @@ class BoltApp(App[None]):
                         "Learn the workflow and see screenshots: "
                         "https://onenova.in/blog/boltpy-terminal-ai-coding-agent-ollama-sglang", markup=True)
         else:
-            self._set_mouse_mode("interactive")
+            self._set_mouse_mode(self.settings.mouse_mode)
             self._write("[bold cyan]Bolt[/bold cyan] — ready. Type /help for commands.", markup=True)
         self.query_one(TodoPanel).refresh_todos()
         self.query_one("#prompt", PromptTextArea).focus(); self._set_status("Ready")

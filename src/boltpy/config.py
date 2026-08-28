@@ -20,6 +20,7 @@ class Settings(BaseModel):
     theme: str = "light"
     workspace: Path = Field(default_factory=Path.cwd)
     first_launch: bool = False
+    mouse_mode: Literal["interactive", "select"] = "interactive"
 
     def available_models(self) -> list[str]:
         """Return configured models with the active model first."""
@@ -41,6 +42,7 @@ _ENV_FIELDS = {
     "BOLT_PROVIDER": "provider",
     "BOLT_ENDPOINT": "base_url",
     "BOLT_WORKSPACE": "workspace",
+    "BOLT_MOUSE_MODE": "mouse_mode",
     "BOLTPY_PROVIDER": "provider",
     "BOLTPY_MODELS": "models",
     "BOLTPY_PERMISSION_MODE": "permission_mode",
