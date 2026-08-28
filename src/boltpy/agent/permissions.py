@@ -7,6 +7,12 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+class PermissionLevel(StrEnum):
+    """Risk level used to decide whether a tool may run automatically."""
+    SAFE = "safe"
+    CONFIRM = "confirm"
+    DANGEROUS = "dangerous"
+
 class PermissionMode(StrEnum):
     """Whether approval is required for tools that declare a capability."""
     ASK = "ask"
@@ -26,6 +32,7 @@ class PermissionRequest:
     tool_name: str
     capability: str
     arguments: dict[str, Any]
+    level: PermissionLevel = PermissionLevel.CONFIRM
 
 PermissionHandler = Callable[[PermissionRequest], PermissionDecision | Awaitable[PermissionDecision]]
 
@@ -84,7 +91,11 @@ class PermissionManager:
 
     async def authorize(self, request: PermissionRequest) -> PermissionDecision:
         """Return a decision, pausing asynchronously when a handler is present."""
-        if not request.capability or self.mode == PermissionMode.ALLOW:
+        if not request.capability:
+            return PermissionDecision.ALLOW_ONCE
+        # Dangerous actions always require a fresh explicit decision, even in
+        # allow mode, and are never remembered as session/permanent grants.
+        if self.mode == PermissionMode.ALLOW and request.level != PermissionLevel.DANGEROUS:
             return PermissionDecision.ALLOW_ONCE
         if self.mode == PermissionMode.PLAN:
             # Plan mode blocks write/shell actions so the agent must propose a
@@ -100,6 +111,8 @@ class PermissionManager:
         decision = self.handler(request)
         if hasattr(decision, "__await__"):
             decision = await decision
+        if request.level == PermissionLevel.DANGEROUS:
+            return PermissionDecision.ALLOW_ONCE if decision in {PermissionDecision.ALLOW_SESSION, PermissionDecision.ALLOW_PERMANENT} else decision
         if decision == PermissionDecision.ALLOW_SESSION:
             self._session_grants.add(request.capability)
         elif decision == PermissionDecision.ALLOW_PERMANENT:

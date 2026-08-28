@@ -17,6 +17,9 @@ from boltpy.agent.core import Agent
 from boltpy.agent.permissions import PermissionDecision, PermissionManager, PermissionMode, PermissionRequest
 from boltpy.agent.todos import todo_store
 from boltpy.config import Settings
+from boltpy.agent.context import project_context
+from boltpy.agent.session import SessionStore
+from boltpy.agent.providers import build_provider
 
 _TODO_TOOLS = {"add_todo", "complete_todo", "update_todo", "list_todos"}
 _TASK_ACTIONS = re.compile(r"\b(check|find|list|tell|show|run|stop|start|create|update|fix|deploy|verify|remove|delete|build|test)\b", re.IGNORECASE)
@@ -28,12 +31,19 @@ _HELP_TEXT = (
     "/mode ask|allow|plan  change permission mode\n"
     "/theme dark|light  switch theme\n"
     "/model  choose the active configured model\n"
+    "/models  list models from the active provider\n"
     "/todo  toggle the todo panel\n"
     "/queue  list queued prompts\n"
     "/permissions  list permanent approvals\n"
     "/permissions remove <command>  remove an exact approval\n"
     "/mouse interactive|select  widget mouse (default) or native selection\n"
     "/new  start a new conversation\n"
+    "/status  show provider and workspace health\n"
+    "/providers  show the active provider\n"
+    "/context  show detected project context\n"
+    "/diff  show the current Git diff\n"
+    "/init  create a BOLT.md instruction template\n"
+    "/compact  trim old conversation messages\n"
     "/quit  exit\n\n"
     "[bold]Keys[/bold]\n"
     "Enter send · Ctrl+Shift+S commands · Ctrl+Shift+M mode · Ctrl+Shift+T todos · Ctrl+Shift+I interactive cursor · Ctrl+Q quit · Ctrl+C cancel\n"
@@ -277,10 +287,10 @@ class TodoPanel(Static):
         self.update(text)
 
 
-class BoltpyApp(App[None]):
+class BoltApp(App[None]):
     """Streaming chat application with Markdown, themes, tools, and inline approval."""
     CSS_PATH = "styles.tcss"
-    TITLE = "Boltpy"
+    TITLE = "Bolt"
     BINDINGS = [
         ("ctrl+c", "cancel_operation", "Cancel operation"),
         ("ctrl+q", "quit", "Quit"),
@@ -291,7 +301,7 @@ class BoltpyApp(App[None]):
     ]
 
     def __init__(self, settings: Settings) -> None:
-        super().__init__(); self.settings = settings; self.busy = False; self.theme_name = "light"; self.mouse_mode = "interactive"
+        super().__init__(); self.settings = settings; self.settings.workspace = settings.workspace.resolve(); self.session_store = SessionStore(self.settings.workspace); self.busy = False; self.theme_name = "light"; self.mouse_mode = "interactive"
         self._prompt_queue: list[str] = []
         self._permission_future: asyncio.Future[PermissionDecision] | None = None
         self._options_future: asyncio.Future[str] | None = None
@@ -312,7 +322,7 @@ class BoltpyApp(App[None]):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Container(id="main"):
-            yield Static(f"CWD: {Path.cwd()}", id="cwd")
+            yield Static(f"Workspace: {self.settings.workspace}", id="cwd")
             with Horizontal(id="content"):
                 yield ConversationLog(id="transcript")
                 yield TodoPanel()
@@ -320,7 +330,7 @@ class BoltpyApp(App[None]):
             yield ModelPrompt()
             yield OptionsPrompt()
             yield Static("", id="status")
-            yield PromptTextArea(placeholder="Ask Boltpy anything… (Enter to send, Shift+Enter for newline)", id="prompt")
+            yield PromptTextArea(placeholder="Ask Bolt anything… (Enter to send, Shift+Enter for newline)", id="prompt")
         # Keep the cancel action first and compact so it remains visible in
         # narrow terminals instead of scrolling off the footer.
         yield Footer(show_command_palette=False, compact=True)
@@ -332,7 +342,7 @@ class BoltpyApp(App[None]):
         self._set_mouse_mode("interactive")
         self.query_one(TodoPanel).refresh_todos()
         self.query_one("#prompt", PromptTextArea).focus(); self._set_status("Ready")
-        self._write("[bold cyan]Boltpy[/bold cyan] — ready. Type /help for commands.", markup=True)
+        self._write("[bold cyan]Bolt[/bold cyan] — ready. Type /help for commands.", markup=True)
 
     def _write(self, content: object, markup: bool = False) -> None:
         if isinstance(content, Widget):
@@ -351,7 +361,7 @@ class BoltpyApp(App[None]):
         provider = getattr(getattr(self.agent, "provider", None), "provider_name", "openai")
         tokens = getattr(getattr(self.agent, "provider", None), "total_tokens", 0)
         status = Text()
-        status.append(f"Boltpy | Mode: {self.permissions.mode.upper()} | Mouse: {self.mouse_mode.upper()} | Model: {provider}/{self.settings.model} | Tokens: {tokens}")
+        status.append(f"Bolt | Mode: {self.permissions.mode.upper()} | Mouse: {self.mouse_mode.upper()} | Model: {provider}/{self.settings.model} | Tokens: {tokens}")
         if self.busy:
             status.append(" | ", style="dim")
             status.append("Processing…", style="blink bold")
@@ -435,19 +445,11 @@ class BoltpyApp(App[None]):
         """
         models = self.settings.available_models()
         try:
-            process = await asyncio.create_subprocess_exec(
-                "ollama", "list",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=3)
-        except (OSError, asyncio.TimeoutError):
-            return models
-        if process.returncode != 0:
-            return models
-        for line in stdout.decode("utf-8", errors="replace").splitlines()[1:]:
-            name = line.split(None, 1)[0] if line.split() else ""
-            if name and name not in models:
+            discovered = await self.agent.provider.list_models()
+        except Exception:
+            discovered = []
+        for name in discovered:
+            if name not in models:
                 models.append(name)
         return models
 
@@ -477,10 +479,43 @@ class BoltpyApp(App[None]):
         self.query_one("#prompt", PromptTextArea).text = ""
         if prompt == "/quit": self.exit()
         elif prompt == "/new": self.agent.reset(); self._write("[dim]Started a new conversation.[/dim]", markup=True)
+        elif prompt == "/context": self._write(project_context(self.settings.workspace))
+        elif prompt == "/providers" or prompt == "/provider": self._write(f"Active provider: {self.settings.provider}")
+        elif prompt.startswith("/provider "):
+            provider_name = prompt.partition(" ")[2].strip()
+            self.settings.provider = provider_name
+            await self.agent.provider.close()
+            self.agent.provider = build_provider(self.settings)
+            self._write(f"Active provider: {provider_name}")
+            self._set_status("Ready")
+        elif prompt == "/status":
+            healthy, detail = await self.agent.provider.health_check()
+            state = "Connected" if healthy else "Unavailable"
+            self._write(f"Provider: {self.settings.provider} ({state})\nModel: {self.settings.model}\nWorkspace: {self.settings.workspace}\n{detail}")
+        elif prompt == "/diff":
+            result = await self.agent.registry.execute("git_diff", {})
+            self._write(result.display(limit=12000))
+        elif prompt == "/init":
+            target = self.settings.workspace / "BOLT.md"
+            if target.exists(): self._write("BOLT.md already exists.")
+            else:
+                target.write_text("# Bolt project instructions\n\nDescribe project conventions and safety boundaries here.\n", encoding="utf-8")
+                self._write("Created BOLT.md.")
+        elif prompt == "/compact":
+            before = len(self.agent.messages)
+            self.agent.messages = self.agent.messages[:1] + self.agent.messages[-12:]
+            self._write(f"Compacted conversation from {before} to {len(self.agent.messages)} messages.")
         elif prompt == "/help":
             self.action_show_commands()
         elif prompt == "/model":
             self.query_one(ModelPrompt).present(await self._available_models(), self.settings.model)
+        elif prompt == "/models":
+            models = await self._available_models()
+            self._write("Available models:\n" + "\n".join(models) if models else "No models reported by the provider.")
+        elif prompt == "/clear":
+            transcript = self.query_one("#transcript", ConversationLog)
+            await transcript.remove_children()
+            self._write("[dim]Conversation display cleared. Model history is preserved.[/dim]", markup=True)
         elif prompt == "/todo":
             self.action_toggle_todo()
         elif prompt == "/queue":
@@ -570,4 +605,11 @@ class BoltpyApp(App[None]):
             self.query_one(TodoPanel).refresh_todos()
         self._set_status("Ready")
 
-    async def on_unmount(self) -> None: await self.agent.close()
+    async def on_unmount(self) -> None:
+        try: self.session_store.save(self.agent.messages)
+        except OSError: pass
+        await self.agent.close()
+
+
+# Backward-compatible import name for existing integrations.
+BoltpyApp = BoltApp

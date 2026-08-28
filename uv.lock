@@ -34,7 +34,7 @@ wheels = [
 ]
 
 [[package]]
-name = "boltpy"
+name = "bolt"
 version = "1.0.2"
 source = { editable = "." }
 dependencies = [

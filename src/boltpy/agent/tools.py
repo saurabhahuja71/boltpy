@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 import httpx
-from boltpy.agent.permissions import PermissionRequest
+from boltpy.agent.permissions import PermissionLevel, PermissionRequest
 from boltpy.agent.todos import todo_store
 
 ToolFunction = Callable[..., Any]
@@ -63,11 +63,15 @@ class Tool:
     function: ToolFunction
     capability: str | None = None
     validator: ToolValidator | None = None
+    permission_level: PermissionLevel = PermissionLevel.SAFE
     def schema(self) -> dict[str, Any]:
         return {"type": "function", "function": {"name": self.name, "description": self.description, "parameters": self.parameters}}
     def permission_request(self, arguments: dict[str, Any]) -> PermissionRequest | None:
         if not self.capability: return None
-        return PermissionRequest(self.name, self.capability, arguments)
+        level = self.permission_level
+        if self.name in {"run_shell", "ssh", "ssh_execute"} and any(re.search(pattern, str(arguments.get("command", "")), re.IGNORECASE) for pattern in _DANGEROUS_COMMANDS):
+            level = PermissionLevel.DANGEROUS
+        return PermissionRequest(self.name, self.capability, arguments, level)
     def validate(self, arguments: dict[str, Any]) -> None:
         if self.validator: self.validator(arguments)
 
@@ -260,17 +264,17 @@ def _present_options_placeholder(title: str, options: list[str], allow_custom: b
     """Fallback used when no interactive options handler is wired up."""
     return ToolResult(ok=False, error="present_options requires an interactive UI; not available here")
 
-def default_registry() -> ToolRegistry:
+def default_registry(root: str | os.PathLike[str] = ".") -> ToolRegistry:
     """Build the standard registry; callers may register more tools."""
     registry = ToolRegistry()
-    registry.register(Tool("read_file", "Read a UTF-8 text file.", {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}, read_file))
-    registry.register(Tool("list_dir", "List files and directories.", {"type": "object", "properties": {"path": {"type": "string", "default": "."}}}, list_dir))
-    registry.register(Tool("run_shell", "Run a local shell command when permitted.", {"type": "object", "properties": {"command": {"type": "string"}, "timeout": {"type": "number", "default": 30}}, "required": ["command"]}, run_shell, capability="shell.execute", validator=lambda args: (validate_shell_command(args.get("command", "")), _validate_timeout(float(args.get("timeout", 30))))))
+    from boltpy.agent.coding import Workspace, coding_registry
+    coding_registry(registry, Workspace(root))
+    registry.register(Tool("run_shell", "Run a local shell command when permitted.", {"type": "object", "properties": {"command": {"type": "string"}, "timeout": {"type": "number", "default": 30}}, "required": ["command"]}, run_shell, capability="shell.execute", validator=lambda args: (validate_shell_command(args.get("command", "")), _validate_timeout(float(args.get("timeout", 30)))), permission_level=PermissionLevel.CONFIRM))
     ssh_schema = {"type": "object", "properties": {"host": {"type": "string", "description": "SSH config alias, for example podman8 or podman9"}, "command": {"type": "string"}, "user": {"type": "string"}, "port": {"type": "integer"}, "timeout": {"type": "number", "default": 30}}, "required": ["host", "command"]}
     # Keep the old name for compatibility, but expose the benchmark contract
     # explicitly.  A model cannot call ssh_execute if it is not in the schema.
-    registry.register(Tool("ssh_execute", "Execute a command remotely through SSH. Use this for every remote command; do not use run_shell.", ssh_schema, ssh, capability="ssh.execute", validator=_validate_ssh))
-    registry.register(Tool("ssh", "Compatibility alias for ssh_execute.", ssh_schema, ssh, capability="ssh.execute", validator=_validate_ssh))
+    registry.register(Tool("ssh_execute", "Execute a command remotely through SSH. Use this for every remote command; do not use run_shell.", ssh_schema, ssh, capability="ssh.execute", validator=_validate_ssh, permission_level=PermissionLevel.CONFIRM))
+    registry.register(Tool("ssh", "Compatibility alias for ssh_execute.", ssh_schema, ssh, capability="ssh.execute", validator=_validate_ssh, permission_level=PermissionLevel.CONFIRM))
     registry.register(Tool("http_request", "Perform an HTTP(S) request and return the response body. Useful for web APIs such as GitLab.", {"type": "object", "properties": {"method": {"type": "string", "default": "GET"}, "url": {"type": "string"}, "headers": {"type": "object"}, "body": {"type": ["string", "object"]}, "timeout": {"type": "number", "default": 30}}, "required": ["url"]}, http_request, validator=_validate_http))
     registry.register(Tool("present_options", "Present a short numbered menu of choices to the user and return the selected choice.", {"type": "object", "properties": {"title": {"type": "string", "default": "Choose an option"}, "options": {"type": "array", "items": {"type": "string"}}, "allow_custom": {"type": "boolean", "default": True}}, "required": ["options"]}, _present_options_placeholder))
     registry.register(Tool("add_todo", "Add a todo item to the shared list.", {"type": "object", "properties": {"description": {"type": "string"}}, "required": ["description"]}, add_todo))

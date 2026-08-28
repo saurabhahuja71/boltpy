@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 from boltpy.agent.permissions import PermissionDecision, PermissionManager, PermissionMode
-from boltpy.agent.providers import Message, OpenAICompatibleProvider, ProviderEvent
+from boltpy.agent.providers import Message, Provider, ProviderEvent, build_provider
 from boltpy.agent.tools import ToolRegistry, ToolResult, default_registry, parse_arguments
 from boltpy.config import Settings
 
@@ -50,13 +50,13 @@ _TOOL_DISCIPLINE_GUIDANCE = (
 
 class Agent:
     """History-aware agent supporting multiple tool calls and iterations."""
-    def __init__(self, settings: Settings, provider: OpenAICompatibleProvider | None = None,
+    def __init__(self, settings: Settings, provider: Provider | None = None,
                  registry: ToolRegistry | None = None, permissions: PermissionManager | None = None,
                  max_tool_iterations: int = 16) -> None:
         self.settings = settings
-        self.provider = provider or OpenAICompatibleProvider(settings)
+        self.provider = provider or build_provider(settings)
         self.messages: list[Message] = [{"role": "system", "content": settings.system_prompt}]
-        self.registry = registry or default_registry()
+        self.registry = registry or default_registry(settings.workspace)
         self.permissions = permissions or PermissionManager(mode=settings.permission_mode)
         self.options_handler: OptionsHandler | None = None
         self.max_tool_iterations = max_tool_iterations

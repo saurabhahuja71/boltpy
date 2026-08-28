@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from typing import Any
 from openai import AsyncOpenAI
+import httpx
 from boltpy.config import Settings, require_api_key
 Message = dict[str, Any]
 
@@ -28,6 +29,14 @@ class Provider(ABC):
     @abstractmethod
     async def stream_response(self, messages: Sequence[Message], tools: list[dict[str, Any]] | None = None) -> AsyncIterator[ProviderEvent]:
         """Yield text fragments and completed tool calls."""
+
+    @abstractmethod
+    async def list_models(self) -> list[str]:
+        """Return models advertised by the provider."""
+
+    @abstractmethod
+    async def health_check(self) -> tuple[bool, str]:
+        """Return connection status and a user-facing explanation."""
 
     async def stream(self, messages: Sequence[Message]) -> AsyncIterator[str]:
         """Compatibility text-only stream."""
@@ -78,6 +87,17 @@ class _OpenAICompatibleBase(Provider):
         for item in calls.values():
             yield ProviderEvent(kind="tool_call", call_id=item["id"], name=item["name"], arguments=item["arguments"])
 
+    async def list_models(self) -> list[str]:
+        response = await self.client.models.list()
+        return [item.id for item in response.data]
+
+    async def health_check(self) -> tuple[bool, str]:
+        try:
+            await self.list_models()
+            return True, "Connected"
+        except Exception as error:
+            return False, str(error)
+
     def _estimate_tokens(self, text: str) -> None:
         """Rough token fallback for providers that do not emit usage chunks."""
         if not self._saw_usage:
@@ -103,8 +123,23 @@ class OllamaProvider(_OpenAICompatibleBase):
 
     def __init__(self, settings: Settings) -> None:
         super().__init__(settings)
-        base_url = settings.base_url or os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434/v1"
-        self.client = AsyncOpenAI(api_key=settings.api_key or "ollama", base_url=base_url)
+        base_url = settings.base_url or os.getenv("OLLAMA_HOST") or os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434"
+        base_url = base_url.rstrip("/")
+        self.ollama_url = base_url.removesuffix("/v1")
+        self.client = AsyncOpenAI(api_key=settings.api_key or "ollama", base_url=base_url if base_url.endswith("/v1") else base_url + "/v1")
+
+    async def list_models(self) -> list[str]:
+        async with httpx.AsyncClient(timeout=5) as client:
+            response = await client.get(self.ollama_url + "/api/tags")
+            response.raise_for_status()
+            return [str(item["name"]) for item in response.json().get("models", []) if item.get("name")]
+
+    async def health_check(self) -> tuple[bool, str]:
+        try:
+            models = await self.list_models()
+            return True, f"Connected ({len(models)} models)"
+        except Exception as error:
+            return False, f"Ollama unavailable at {self.ollama_url}: {error}"
 
 def build_provider(settings: Settings) -> Provider:
     """Construct the provider named by the settings."""
