@@ -81,6 +81,47 @@ class ConversationLog(VerticalScroll):
             self.call_after_refresh(lambda: self.scroll_end(animate=False))
 
 
+class ToolActivity(Static):
+    """Compact in-transcript activity row for one tool invocation."""
+    def __init__(self, name: str, arguments: dict[str, Any] | None = None) -> None:
+        super().__init__(classes="tool-activity", markup=False)
+        self.tool_name = name
+        self.arguments = arguments or {}
+        self._full_detail = ""
+        self._live_detail = ""
+        self._expanded = False
+        self.set_status("running")
+
+    def _summary(self) -> tuple[str, str]:
+        labels = {"search_files": "Searching files", "find_files": "Finding files", "read_file": "Reading file", "list_directory": "Listing directory", "list_dir": "Listing directory", "write_file": "Writing file", "create_file": "Creating file", "edit_file": "Editing file", "run_shell": "Running command", "git_status": "Checking Git status", "git_diff": "Preparing Git diff", "git_log": "Reading Git history"}
+        label = labels.get(self.tool_name, self.tool_name.replace("_", " ").capitalize())
+        value = self.arguments.get("path") or self.arguments.get("query") or self.arguments.get("pattern") or self.arguments.get("command")
+        detail = str(value) if value is not None else ""
+        if self.tool_name == "run_shell" and detail: detail = "$ " + detail
+        return label, detail[:180]
+
+    def append_live(self, chunk: str, is_stderr: bool = False) -> None:
+        self._live_detail = (self._live_detail + chunk)[-1200:]
+        self.set_status("running", self._live_detail)
+
+    def set_status(self, status: str, detail: str = "") -> None:
+        icons = {"running": "●", "success": "✓", "failed": "✗", "cancelled": "⊘"}
+        label, summary = self._summary()
+        self._full_detail = detail or summary
+        shown = self._full_detail if self._expanded else self._full_detail[:180]
+        if len(self._full_detail) > 180 and not self._expanded:
+            shown += " …"
+        text = Text(f"{icons.get(status, "●")} {label}", style="yellow" if status == "running" else "green" if status == "success" else "red")
+        if shown:
+            text.append("\n  ↳ " + shown, style="dim")
+        self.update(text)
+
+    def on_click(self) -> None:
+        if len(self._full_detail) > 180:
+            self._expanded = not self._expanded
+            self.set_status("success", self._full_detail)
+
+
 class PromptTextArea(TextArea):
     """Text area where Enter submits and Shift+Enter inserts a newline."""
     class CommandsRequested(Message):
@@ -307,6 +348,7 @@ class BoltApp(App[None]):
         self._options_future: asyncio.Future[str] | None = None
         self._model_prompt: ModelPrompt | None = None
         self._active_worker = None
+        self._current_activity: ToolActivity | None = None
         self.register_theme(Theme(
             "dark", primary="#58a6ff", secondary="#79c0ff", warning="#d29922", error="#f85149",
             success="#3fb950", accent="#58a6ff", foreground="#e6edf3", background="#101318",
@@ -317,12 +359,13 @@ class BoltApp(App[None]):
             surface="#f6f8fa", panel="#ffffff"))
         self.permissions = PermissionManager(mode=PermissionMode(settings.permission_mode), handler=self._request_permission)
         self.agent = Agent(settings, permissions=self.permissions)
+        self.agent.registry.output_handler = self._tool_output
         self.agent.options_handler = self._request_options
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Container(id="main"):
-            yield Static(f"Workspace: {self.settings.workspace}", id="cwd")
+            yield Static(f"CWD: {self.settings.workspace}", id="cwd")
             with Horizontal(id="content"):
                 yield ConversationLog(id="transcript")
                 yield TodoPanel()
@@ -356,6 +399,11 @@ class BoltApp(App[None]):
         message = Text("You: ", style="bold green")
         message.append(text)
         return Static(message, classes="system-message")
+
+    def _tool_output(self, chunk: str, is_stderr: bool) -> None:
+        """Render bounded live command output in the active activity row."""
+        if self._current_activity is not None:
+            self._current_activity.append_live(chunk, is_stderr)
 
     def _set_status(self, text: str) -> None:
         provider = getattr(getattr(self.agent, "provider", None), "provider_name", "openai")
@@ -577,7 +625,7 @@ class BoltApp(App[None]):
             self.query_one("#prompt", PromptTextArea).focus()
 
     async def _run_prompt(self, prompt: str, transcript: ConversationLog) -> None:
-        self._write(self._user_message(prompt)); answer_parts: list[str] = []
+        self._write(self._user_message(prompt)); answer_parts: list[str] = []; activities: list[ToolActivity] = []
         parent_todo = todo_store.add(f"Task: {prompt[:160]}{'…' if len(prompt) > 160 else ''}")
         self.query_one(TodoPanel).refresh_todos()
         finished = False
@@ -590,12 +638,23 @@ class BoltApp(App[None]):
                     answer_parts.append(event.text); await streaming.update("".join(answer_parts)); transcript.scroll_to_end()
                 elif event.kind == "tool_call":
                     self._set_status(f"Running {event.name}…")
+                    activity = ToolActivity(event.name, event.arguments)
+                    await transcript.log(activity)
+                    activities.append(activity)
+                    self._current_activity = activity
                 elif event.kind == "permission" and event.status == "waiting":
                     self._set_status(f"Waiting for {event.name} approval…")
+                    if activities: activities[-1].set_status("running", "Waiting for approval")
                 elif event.kind == "permission" and event.status != "waiting":
                     self._set_status(f"{event.name}: {event.status}")
-                elif event.kind == "tool_result" and event.name in _TODO_TOOLS:
-                    self.query_one(TodoPanel).refresh_todos()
+                elif event.kind == "tool_result":
+                    if activities:
+                        activity = next((item for item in reversed(activities) if item.name == event.name), activities[-1])
+                        result = event.result
+                        activity.set_status("success" if result and result.ok else "failed", result.display(limit=180) if result else "")
+                        self._current_activity = None
+                    if event.name in _TODO_TOOLS:
+                        self.query_one(TodoPanel).refresh_todos()
             if not answer_parts:
                 streaming.remove()
             finished = True
@@ -606,8 +665,10 @@ class BoltApp(App[None]):
         self._set_status("Ready")
 
     async def on_unmount(self) -> None:
-        try: self.session_store.save(self.agent.messages)
-        except OSError: pass
+        messages = getattr(self.agent, "messages", None)
+        if messages is not None:
+            try: self.session_store.save(messages)
+            except OSError: pass
         await self.agent.close()
 
 

@@ -14,6 +14,7 @@ from boltpy.agent.permissions import PermissionLevel, PermissionRequest
 from boltpy.agent.todos import todo_store
 
 ToolFunction = Callable[..., Any]
+OutputHandler = Callable[[str, bool], Any]
 ToolValidator = Callable[[dict[str, Any]], None]
 
 @dataclass(frozen=True)
@@ -77,8 +78,9 @@ class Tool:
 
 class ToolRegistry:
     """Registry used by both headless and interactive agent execution."""
-    def __init__(self) -> None:
+    def __init__(self, output_handler: OutputHandler | None = None) -> None:
         self._tools: dict[str, Tool] = {}
+        self.output_handler = output_handler
     def register(self, tool: Tool) -> None:
         if tool.name in self._tools: raise ValueError(f"Tool already registered: {tool.name}")
         self._tools[tool.name] = tool
@@ -91,7 +93,10 @@ class ToolRegistry:
         try:
             tool = self.get(name)
             tool.validate(arguments)
-            result = tool.function(**arguments)
+            call_arguments = dict(arguments)
+            if self.output_handler is not None and name == "run_shell":
+                call_arguments["on_output"] = self.output_handler
+            result = tool.function(**call_arguments)
             if asyncio.iscoroutine(result): result = await result
             return result if isinstance(result, ToolResult) else ToolResult(ok=True, output=str(result))
         except Exception as error:
@@ -127,30 +132,63 @@ def list_dir(path: str = ".") -> str:
     except OSError as error: raise RuntimeError(f"Could not list {path!r}: {error}") from error
     return "\n".join(f"{item.name}{'/' if item.is_dir() else ''}" for item in entries) or "(empty directory)"
 
-async def _communicate(process: asyncio.subprocess.Process, timeout: float) -> tuple[bytes, bytes, bool]:
-    """Collect process output, terminating on timeout or task cancellation."""
+async def _read_output(stream: asyncio.StreamReader | None, chunks: list[bytes], on_output: OutputHandler | None, is_stderr: bool) -> None:
+    """Read one subprocess pipe incrementally and publish decoded chunks."""
+    if stream is None:
+        return
+    while data := await stream.read(1024):
+        chunks.append(data)
+        if on_output is not None:
+            value = data.decode("utf-8", errors="replace")
+            callback_result = on_output(value, is_stderr)
+            if hasattr(callback_result, "__await__"):
+                await callback_result
+
+async def _communicate(process: asyncio.subprocess.Process, timeout: float, on_output: OutputHandler | None = None) -> tuple[bytes, bytes, bool]:
+    """Collect process output incrementally, terminating on timeout or cancellation."""
+    if not hasattr(process, "stdout") or not hasattr(process, "stderr"):
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+            return stdout or b"", stderr or b"", False
+        except asyncio.TimeoutError:
+            return b"", b"", True
+    stdout_chunks: list[bytes] = []
+    stderr_chunks: list[bytes] = []
+    readers = [
+        asyncio.create_task(_read_output(process.stdout, stdout_chunks, on_output, False)),
+        asyncio.create_task(_read_output(process.stderr, stderr_chunks, on_output, True)),
+    ]
     try:
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
-        return stdout or b"", stderr or b"", False
+        await asyncio.wait_for(asyncio.gather(*readers), timeout=timeout)
+        await process.wait()
+        return b"".join(stdout_chunks), b"".join(stderr_chunks), False
     except asyncio.TimeoutError:
         process.terminate()
         try: await asyncio.wait_for(process.wait(), timeout=2)
         except asyncio.TimeoutError: process.kill(); await process.wait()
-        return b"", b"", True
+        await asyncio.gather(*readers, return_exceptions=True)
+        return b"".join(stdout_chunks), b"".join(stderr_chunks), True
     except asyncio.CancelledError:
         process.terminate()
         try: await asyncio.wait_for(process.wait(), timeout=2)
         except asyncio.TimeoutError: process.kill(); await process.wait()
+        for reader in readers: reader.cancel()
+        await asyncio.gather(*readers, return_exceptions=True)
         raise
 
-async def run_shell(command: str, timeout: float = 30) -> ToolResult:
-    """Run a local shell command with separate output, timing, timeout, and cancellation."""
-    validate_shell_command(command); _validate_timeout(timeout); started = time.perf_counter()
+
+async def run_shell(command: str, timeout: float = 30, on_output: OutputHandler | None = None) -> ToolResult:
+    """Run a bounded shell command while publishing output incrementally."""
+    validate_shell_command(command)
+    _validate_timeout(timeout)
+    started = time.perf_counter()
     process = await asyncio.create_subprocess_shell(command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-    stdout, stderr, timed_out = await _communicate(process, timeout)
+    stdout, stderr, timed_out = await _communicate(process, timeout, on_output)
     duration = time.perf_counter() - started
-    out = stdout.decode("utf-8", errors="replace").strip(); err = stderr.decode("utf-8", errors="replace").strip()
-    if timed_out: return ToolResult(False, error=f"Command timed out after {timeout:g} seconds", exit_code=process.returncode, stdout=out, stderr=err, duration=duration, timed_out=True)
+    out = stdout.decode("utf-8", errors="replace").strip()
+    err = stderr.decode("utf-8", errors="replace").strip()
+    if timed_out:
+        return ToolResult(False, error=f"Command timed out after {timeout:g} seconds", exit_code=process.returncode, stdout=out, stderr=err, duration=duration, timed_out=True)
     return ToolResult(process.returncode == 0, output=out, exit_code=process.returncode, stdout=out, stderr=err, duration=duration, error=err if process.returncode else "")
 
 def _validate_ssh(arguments: dict[str, Any]) -> None:
