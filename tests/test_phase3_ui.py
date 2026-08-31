@@ -85,12 +85,12 @@ async def test_help_documents_phase3_commands_and_controls():
 async def test_alt_r_shows_all_commands_without_vscode_palette_conflict():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
-        await pilot.press("ctrl+g")
+        await pilot.press("ctrl+o")
         await pilot.pause()
-        assert ("ctrl+g", "show_commands", "Show commands") in app.BINDINGS
+        assert ("ctrl+o", "show_commands", "Show commands") in app.BINDINGS
         rendered = str(app.query_one(ConversationLog).children[-1].render())
         assert "/permissions remove <command>" in rendered
-        assert "Commands Ctrl+G" in rendered
+        assert "Commands Ctrl+O" in rendered
         assert "Theme Ctrl+B" in rendered
 
 @pytest.mark.asyncio
@@ -107,13 +107,13 @@ async def test_alt_y_cycles_permission_modes():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
         assert app.permissions.mode.value == "ask"
-        await pilot.press("ctrl+j")
+        await pilot.press("ctrl+y")
         assert app.permissions.mode.value == "allow"
-        await pilot.press("ctrl+j")
+        await pilot.press("ctrl+y")
         assert app.permissions.mode.value == "plan"
-        await pilot.press("ctrl+j")
+        await pilot.press("ctrl+y")
         assert app.permissions.mode.value == "ask"
-        assert ("ctrl+j", "toggle_mode", "Change permission mode") in app.BINDINGS
+        assert ("ctrl+y", "toggle_mode", "Change permission mode") in app.BINDINGS
         assert ("ctrl+t", "toggle_todo", "Toggle todos") in app.BINDINGS
         assert ("ctrl+l", "toggle_mouse", "Toggle mouse mode") in app.BINDINGS
 
@@ -121,7 +121,7 @@ async def test_alt_y_cycles_permission_modes():
 async def test_alt_r_shows_commands_when_prompt_is_empty():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
-        await pilot.press("ctrl+g")
+        await pilot.press("ctrl+o")
         await pilot.pause()
         assert "/help  show commands and controls" in str(app.query_one(ConversationLog).children[-1].render())
 

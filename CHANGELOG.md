@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.17
+
+- Show Ctrl+Y/T/L as the primary mode, todos, and mouse shortcuts instead of F-key fallbacks.
+
+
 ## 1.1.16
 
 - Map theme selection to Ctrl+B.

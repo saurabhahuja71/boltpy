@@ -57,7 +57,7 @@ _HELP_TEXT = (
     "/quit  exit\n"
     "/exit  exit\n\n"
     "[bold]Keys[/bold]\n"
-    "Enter send · Cancel operation Ctrl+C · Mode Ctrl+J · Todos Ctrl+T · Mouse Ctrl+L · Commands Ctrl+G · Theme Ctrl+B\n"
+    "Enter send · Cancel operation Ctrl+C · Mode Ctrl+Y · Todos Ctrl+T · Mouse Ctrl+L · Commands Ctrl+O · Theme Ctrl+B\n"
     "Permission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\n"
     "Type while a task is running to queue it; Ctrl+C cancels the current task."
 )
@@ -143,9 +143,9 @@ class PromptTextArea(TextArea):
             super().__init__(); self.text = textarea.text
     async def _on_key(self, event: events.Key) -> None:
         shortcut_actions = {
-            "ctrl+c": "cancel_operation", "ctrl+j": "toggle_mode",
+            "ctrl+c": "cancel_operation", "ctrl+y": "toggle_mode",
             "ctrl+t": "toggle_todo", "ctrl+l": "toggle_mouse",
-            "ctrl+g": "show_commands", "ctrl+b": "select_theme",
+            "ctrl+o": "show_commands", "ctrl+b": "select_theme",
         }
         action = shortcut_actions.get(event.key)
         if action is not None:
@@ -356,14 +356,11 @@ class BoltApp(App[None]):
     BINDINGS = [
         ("ctrl+c", "cancel_operation", "Cancel operation"),
         ("ctrl+q", "quit", "Quit"),
-        ("ctrl+g", "show_commands", "Show commands"),
-        ("ctrl+j", "toggle_mode", "Change permission mode"),
+        ("ctrl+o", "show_commands", "Show commands"),
+        ("ctrl+y", "toggle_mode", "Change permission mode"),
         ("ctrl+t", "toggle_todo", "Toggle todos"),
         ("ctrl+l", "toggle_mouse", "Toggle mouse mode"),
         ("ctrl+b", "select_theme", "Choose theme"),
-        ("f3", "toggle_mode", "Change permission mode"),
-        ("f4", "toggle_todo", "Toggle todos"),
-        ("f5", "toggle_mouse", "Toggle mouse mode"),
     ]
 
     def __init__(self, settings: Settings) -> None:
