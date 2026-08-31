@@ -79,7 +79,7 @@ Install for the current user with:
 curl -fsSL https://raw.githubusercontent.com/saurabhahuja71/boltpy/main/install.sh | bash
 ```
 
-The installer uses an isolated environment under ~/.local/share/bolt and places the command in ~/.local/bin. It does not require sudo.
+The installer searches for Python 3.12 or newer (including versioned commands such as `python3.12`), then creates an isolated environment under `~/.local/share/bolt` and places the command in `~/.local/bin`. If [uv](https://docs.astral.sh/uv/) is installed, it can download a compatible Python automatically without sudo. Set `PYTHON=/path/to/python` to choose a specific interpreter.
 
 ## Usage
 
