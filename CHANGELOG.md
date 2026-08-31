@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.18
+
+- Add `/remap` to change, list, and reset live keyboard shortcuts.
+- Remapped shortcuts are reflected immediately in the footer.
+
+
 ## 1.1.17
 
 - Show Ctrl+Y/T/L as the primary mode, todos, and mouse shortcuts instead of F-key fallbacks.

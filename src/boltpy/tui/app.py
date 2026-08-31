@@ -52,6 +52,9 @@ _HELP_TEXT = (
     "/init  create a BOLT.md instruction template\n"
     "/compact  trim old conversation messages\n"
     "/clear  clear the visible conversation\n"
+    "/remap  list shortcut mappings\n"
+    "/remap <action> <key>  remap a shortcut\n"
+    "/remap reset  restore default shortcuts\n"
     "/provider  show the active provider\n"
     "/provider <name>  switch provider\n"
     "/quit  exit\n"
@@ -385,6 +388,15 @@ class BoltApp(App[None]):
         self.agent = Agent(settings, permissions=self.permissions)
         self.agent.registry.output_handler = self._tool_output
         self.agent.options_handler = self._request_options
+        self._default_shortcuts = {
+            "cancel": ("ctrl+c", "Cancel operation", "cancel_operation"),
+            "mode": ("ctrl+y", "Change permission mode", "toggle_mode"),
+            "todos": ("ctrl+t", "Toggle todos", "toggle_todo"),
+            "mouse": ("ctrl+l", "Toggle mouse mode", "toggle_mouse"),
+            "commands": ("ctrl+o", "Show commands", "show_commands"),
+            "theme": ("ctrl+b", "Choose theme", "select_theme"),
+        }
+        self.shortcut_actions = {key: action for key, _label, action in self._default_shortcuts.values()}
 
     def compose(self) -> ComposeResult:
         with Container(id="main"):
@@ -399,7 +411,7 @@ class BoltApp(App[None]):
             yield Static("", id="command-suggestions")
         # Keep the cancel action first and compact so it remains visible in
         # narrow terminals instead of scrolling off the footer.
-        yield Footer(show_command_palette=False, compact=True)
+        yield Footer(show_command_palette=False, compact=False)
 
     def on_mount(self) -> None:
         self._apply_theme(self.settings.theme if self.settings.theme in {"dark", "light"} else "dark")
@@ -471,6 +483,47 @@ class BoltApp(App[None]):
             self.theme = theme
             self.theme_name = theme
             self.settings.theme = theme
+
+    def _shortcut_text(self) -> str:
+        """Return current remappable shortcuts in footer order."""
+        return "\n".join(f"{key}  {label}" for key, label, _action in self._default_shortcuts.values())
+
+    def _remap_shortcut(self, action_name: str, key: str) -> str:
+        """Apply a validated shortcut remap and refresh the footer."""
+        aliases = {"cancel": "cancel", "mode": "mode", "todos": "todos", "todo": "todos", "mouse": "mouse", "commands": "commands", "command": "commands", "theme": "theme"}
+        name = aliases.get(action_name.casefold())
+        if name is None:
+            raise ValueError("action must be cancel, mode, todos, mouse, commands, or theme")
+        key = key.casefold()
+        if not (re.fullmatch(r"ctrl\+[a-z]", key) or re.fullmatch(r"f(?:[1-9]|1[0-2])", key)):
+            raise ValueError("key must be a Ctrl+letter or F1-F12")
+        target_action = self._default_shortcuts[name][2]
+        if key in self.shortcut_actions and self.shortcut_actions[key] != target_action:
+            raise ValueError(f"{key} is already assigned")
+        old_key = next((current for current, action in self.shortcut_actions.items() if action == target_action), None)
+        if old_key is not None:
+            self._bindings.key_to_bindings[old_key] = [binding for binding in self._bindings.key_to_bindings[old_key] if binding.action != target_action]
+            if not self._bindings.key_to_bindings[old_key]:
+                del self._bindings.key_to_bindings[old_key]
+        self.shortcut_actions.pop(old_key, None) if old_key is not None else None
+        self.shortcut_actions[key] = target_action
+        label = self._default_shortcuts[name][1]
+        self.bind(key, target_action, description=label)
+        self._default_shortcuts[name] = (key, label, target_action)
+        self.refresh_bindings(); self.screen.refresh_bindings()
+        return f"Remapped {label} to {key}."
+
+    def _reset_shortcuts(self) -> None:
+        for name, (key, _label, action) in self._default_shortcuts.items():
+            self._bindings.key_to_bindings[key] = [binding for binding in self._bindings.key_to_bindings.get(key, []) if binding.action != action]
+        self._default_shortcuts = {
+            "cancel": ("ctrl+c", "Cancel operation", "cancel_operation"), "mode": ("ctrl+y", "Change permission mode", "toggle_mode"),
+            "todos": ("ctrl+t", "Toggle todos", "toggle_todo"), "mouse": ("ctrl+l", "Toggle mouse mode", "toggle_mouse"),
+            "commands": ("ctrl+o", "Show commands", "show_commands"), "theme": ("ctrl+b", "Choose theme", "select_theme"),
+        }
+        self.shortcut_actions = {key: action for key, _label, action in self._default_shortcuts.values()}
+        for key, label, action in self._default_shortcuts.values(): self.bind(key, action, description=label)
+        self.refresh_bindings(); self.screen.refresh_bindings()
 
     def action_cancel_operation(self) -> None:
         """Cancel the active model or tool worker."""
@@ -667,6 +720,16 @@ class BoltApp(App[None]):
                 if target == scope or target == scope.split("|")[-1]:
                     removed = self.permissions.remove_permanent(section, scope) or removed
             self._write("Removed permanent permission." if removed else "No matching permanent permission found.")
+        elif prompt == "/remap": self._write("[bold]Shortcuts[/bold]\n" + self._shortcut_text(), markup=True)
+        elif prompt == "/remap reset":
+            self._reset_shortcuts(); self._write("Shortcuts restored to defaults."); self._set_status("Ready")
+        elif prompt.startswith("/remap "):
+            parts = prompt.split()
+            if len(parts) != 3:
+                self._write("[bold red]Usage:[/bold red] /remap <action> <ctrl+letter|f1-f12> or /remap reset", markup=True)
+            else:
+                try: self._write(self._remap_shortcut(parts[1], parts[2])); self._set_status("Ready")
+                except ValueError as error: self._write(f"[bold red]Remap error:[/bold red] {error}", markup=True)
         elif prompt == "/mode": self._write(f"Current permission mode: {self.permissions.mode.value}")
         elif prompt.startswith("/mode "):
             mode = prompt.partition(" ")[2].strip()

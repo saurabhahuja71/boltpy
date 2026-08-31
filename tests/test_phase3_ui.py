@@ -99,7 +99,7 @@ async def test_cancel_shortcut_is_first_in_compact_footer():
     async with app.run_test():
         footer = app.query_one(Footer)
         assert app.BINDINGS[0] == ("ctrl+c", "cancel_operation", "Cancel operation")
-        assert footer.compact
+        assert not footer.compact
         assert not footer.show_command_palette
 
 @pytest.mark.asyncio

@@ -176,7 +176,7 @@ The TUI has a single chat transcript on the left with a collapsible todo side pa
 | `Enter` | Send the prompt |
 | `Shift+Enter` | Insert a newline |
 
-The standard shortcut footer is shown at the bottom of the TUI; no extra top header block is rendered. Slash-command suggestions appear directly below the prompt. Run `/theme` or press `Ctrl+B` to open the interactive dark/light selector. Typing `/` shows filtered available commands. Ctrl+B opens themes, `/clear` clears the visible transcript, and Ctrl+O shows commands. Slash commands work in VS Code and normal terminals; The confirmed Ctrl shortcuts are handled from the prompt as well as globally for reliable terminal compatibility.
+The full shortcut footer reflects live `/remap` changes. is shown at the bottom of the TUI; no extra top header block is rendered. Slash-command suggestions appear directly below the prompt. Run `/theme` or press `Ctrl+B` to open the interactive dark/light selector. Typing `/` shows filtered available commands. Ctrl+B opens themes, `/clear` clears the visible transcript, and Ctrl+O shows commands. Slash commands work in VS Code and normal terminals; The confirmed Ctrl shortcuts are handled from the prompt as well as globally for reliable terminal compatibility.
 
 Prompts sent while a task is running are queued and run in order when it finishes; the status bar shows the number waiting and `/queue` lists them.
 
