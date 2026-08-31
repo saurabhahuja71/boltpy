@@ -152,6 +152,7 @@ class PromptTextArea(TextArea):
             "alt+y": "toggle_mode", "meta+y": "toggle_mode",
             "alt+u": "toggle_todo", "meta+u": "toggle_todo",
             "alt+i": "toggle_mouse", "meta+i": "toggle_mouse",
+            "alt+p": "select_theme", "meta+p": "select_theme",
             "alt+q": "quit", "meta+q": "quit",
             "alt+c": "cancel_operation", "meta+c": "cancel_operation",
         }
@@ -162,11 +163,13 @@ class PromptTextArea(TextArea):
             event.stop(); event.prevent_default(); return
         if getattr(self, "_alt_prefix", False):
             self._alt_prefix = False
-            action = {"r": "show_commands", "y": "toggle_mode", "u": "toggle_todo", "i": "toggle_mouse", "q": "quit", "c": "cancel_operation"}.get(event.key.lower())
+            action = {"r": "show_commands", "y": "toggle_mode", "u": "toggle_todo", "i": "toggle_mouse", "p": "select_theme", "q": "quit", "c": "cancel_operation"}.get(event.key.lower())
             if action is not None:
                 event.stop(); event.prevent_default()
                 if action == "show_commands" and not self.text:
                     self.post_message(self.CommandsRequested())
+                elif action == "quit":
+                    self.app.exit()
                 else:
                     getattr(self.app, f"action_{action}")()
                 return
@@ -175,6 +178,8 @@ class PromptTextArea(TextArea):
             event.stop(); event.prevent_default()
             if action == "show_commands" and not self.text:
                 self.post_message(self.CommandsRequested())
+            elif action == "quit":
+                self.app.exit()
             else:
                 getattr(self.app, f"action_{action}")()
             return
@@ -383,7 +388,7 @@ class BoltApp(App[None]):
         ("alt+y", "toggle_mode", "Change permission mode"),
         ("alt+u", "toggle_todo", "Toggle todos"),
         ("alt+i", "toggle_mouse", "Toggle interactive cursor"),
-        ("f2", "select_theme", "Choose theme"),
+        ("alt+p", "select_theme", "Choose theme"),
         ("f3", "toggle_mode", "Change permission mode"),
         ("f4", "toggle_todo", "Toggle todos"),
         ("f5", "toggle_mouse", "Toggle mouse mode"),
