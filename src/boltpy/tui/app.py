@@ -31,8 +31,8 @@ _COMMANDS = (
 )
 
 _SHORTCUT_HELP = (
-    "Shortcuts: Commands (Alt+R) · Mode (Alt+Y) · Todos (Alt+U) · Mouse (Alt+I) · "
-    "Exit (Alt+Q) · Cancel (Alt+C) · Theme (F2) · F3/F4/F5 mode/todos/mouse"
+    "Shortcuts: Show commands Alt+R · Change permission mode Alt+Y · Toggle todos Alt+U · "
+    "Toggle interactive cursor Alt+I · Quit Alt+Q · Cancel operation Alt+C · Choose theme Alt+P"
 )
 
 _HELP_TEXT = (
@@ -59,7 +59,7 @@ _HELP_TEXT = (
     "/quit  exit\n"
     "/exit  exit\n\n"
     "[bold]Keys[/bold]\n"
-    "Enter send · F2 theme · F3/Win+M mode · F4/Win+T todos · F5/Win+I mouse · Win+S commands · Win+Q quit · Win+C cancel\n"
+    "Enter send · Cancel operation Alt+C · Quit Alt+Q · Show commands Alt+R · Change permission mode Alt+Y · Toggle todos Alt+U · Toggle interactive cursor Alt+I · Choose theme Alt+P\n"
     "Permission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\n"
     "Type while a task is running to queue it; Alt+C cancels the current task."
 )

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.12
+
+- Display shortcut operation names before their key combinations consistently.
+
+
 ## 1.1.11
 
 - Use MATE-confirmed Alt+P for theme selection and direct ESC+Q exit handling.

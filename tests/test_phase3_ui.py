@@ -80,8 +80,8 @@ async def test_alt_r_shows_all_commands_without_vscode_palette_conflict():
         assert ("alt+r", "show_commands", "Show commands") in app.BINDINGS
         rendered = str(app.query_one(ConversationLog).children[-1].render())
         assert "/permissions remove <command>" in rendered
-        assert "Win+S commands" in rendered
-        assert "F3/Win+M mode" in rendered
+        assert "Show commands Alt+R" in rendered
+        assert "Change permission mode Alt+Y" in rendered
 
 @pytest.mark.asyncio
 async def test_cancel_shortcut_is_first_in_compact_footer():
