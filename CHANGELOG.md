@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.10
+
+- Put shortcut operation names before their key combinations for clearer display.
+
+
 ## 1.1.9
 
 - Remap MATE-safe Alt shortcuts to keys confirmed to pass through the terminal.

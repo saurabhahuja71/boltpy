@@ -31,8 +31,8 @@ _COMMANDS = (
 )
 
 _SHORTCUT_HELP = (
-    "Shortcuts: Alt+R commands · Alt+Y mode · Alt+U todos · Alt+I mouse · "
-    "Alt+Q exit · Alt+C cancel · F2 theme · F3/F4/F5 mode/todos/mouse"
+    "Shortcuts: Commands (Alt+R) · Mode (Alt+Y) · Todos (Alt+U) · Mouse (Alt+I) · "
+    "Exit (Alt+Q) · Cancel (Alt+C) · Theme (F2) · F3/F4/F5 mode/todos/mouse"
 )
 
 _HELP_TEXT = (
