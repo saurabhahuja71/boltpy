@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.4
+
+- Use Alt-only application shortcuts for consistent terminal behavior.
+
+
 ## 1.1.3
 
 - Handle Ctrl+Alt shortcuts directly from the prompt for MATE Terminal compatibility.

@@ -166,20 +166,20 @@ The TUI has a single chat transcript on the left with a collapsible todo side pa
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl+Alt+S` | Show all commands and shortcuts |
-| `Ctrl+Alt+M` | Cycle permission mode: ASK → ALLOW → PLAN |
-| `Ctrl+Alt+T` | Toggle the todo panel |
-| `Ctrl+Alt+I` | Toggle interactive cursor/mouse mode and native text selection |
-| `Ctrl+C` | Cancel the current task; queued prompts continue afterward |
-| `Ctrl+Q` | Quit |
+| `Alt+S` | Show all commands and shortcuts |
+| `Alt+M` | Cycle permission mode: ASK → ALLOW → PLAN |
+| `Alt+T` | Toggle the todo panel |
+| `Alt+I` | Toggle interactive cursor/mouse mode and native text selection |
+| `Alt+C` | Cancel the current task; queued prompts continue afterward |
+| `Alt+Q` | Quit |
 | `Enter` | Send the prompt |
 | `Shift+Enter` | Insert a newline |
 
-Run `/theme` or press `F2` to open the interactive dark/light selector. `F3`, `F4`, and `F5` switch permission mode, todos, and mouse mode. Function keys and slash commands work in VS Code and normal terminals; Ctrl+Alt shortcuts are handled from the prompt as well as globally for better MATE Terminal compatibility.
+Run `/theme` or press `F2` to open the interactive dark/light selector. `F3`, `F4`, and `F5` switch permission mode, todos, and mouse mode. Function keys and slash commands work in VS Code and normal terminals; Alt shortcuts are handled from the prompt as well as globally for better MATE Terminal compatibility.
 
 Prompts sent while a task is running are queued and run in order when it finishes; the status bar shows the number waiting and `/queue` lists them.
 
-Text selection and clipboard behavior remain terminal-native. Interactive cursor mode is the default: mouse clicks and scrolling work on widgets such as permission/model buttons. Use `/mouse select` or `Ctrl+Alt+I` when you need native terminal selection — drag across conversation text and use the terminal’s copy/paste shortcuts, commonly Ctrl+Shift+C / Ctrl+Shift+V or Shift+Insert — then return with `/mouse interactive` or `Ctrl+Alt+I`.
+Text selection and clipboard behavior remain terminal-native. Interactive cursor mode is the default: mouse clicks and scrolling work on widgets such as permission/model buttons. Use `/mouse select` or `Alt+I` when you need native terminal selection — drag across conversation text and use the terminal’s copy/paste shortcuts, commonly Alt+C / Alt+V or Shift+Insert — then return with `/mouse interactive` or `Alt+I`.
 
 ### Example prompts
 

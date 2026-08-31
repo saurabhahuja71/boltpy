@@ -48,9 +48,9 @@ _HELP_TEXT = (
     "/quit  exit\n"
     "/exit  exit\n\n"
     "[bold]Keys[/bold]\n"
-    "Enter send · F2 theme · F3/Ctrl+Alt+M mode · F4/Ctrl+Alt+T todos · F5/Ctrl+Alt+I mouse · Ctrl+Alt+S commands · Ctrl+Q quit · Ctrl+C cancel\n"
+    "Enter send · F2 theme · F3/Alt+M mode · F4/Alt+T todos · F5/Alt+I mouse · Alt+S commands · Alt+Q quit · Alt+C cancel\n"
     "Permission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\n"
-    "Type while a task is running to queue it; Ctrl+C cancels the current task."
+    "Type while a task is running to queue it; Alt+C cancels the current task."
 )
 
 
@@ -134,13 +134,13 @@ class PromptTextArea(TextArea):
             super().__init__(); self.text = textarea.text
     async def _on_key(self, event: events.Key) -> None:
         # Handle app shortcuts in the focused prompt as well as global bindings.
-        # MATE Terminal can deliver Ctrl+Alt as a widget key (or use the
-        # ctrl+meta spelling), bypassing App.BINDINGS.
+        # MATE Terminal can deliver Alt as a widget key (or use the
+        # meta spelling), bypassing App.BINDINGS.
         shortcut_actions = {
-            "ctrl+alt+s": "show_commands", "ctrl+meta+s": "show_commands",
-            "ctrl+alt+m": "toggle_mode", "ctrl+meta+m": "toggle_mode",
-            "ctrl+alt+t": "toggle_todo", "ctrl+meta+t": "toggle_todo",
-            "ctrl+alt+i": "toggle_mouse", "ctrl+meta+i": "toggle_mouse",
+            "alt+s": "show_commands", "meta+s": "show_commands",
+            "alt+m": "toggle_mode", "meta+m": "toggle_mode",
+            "alt+t": "toggle_todo", "meta+t": "toggle_todo",
+            "alt+i": "toggle_mouse", "meta+i": "toggle_mouse",
         }
         action = shortcut_actions.get(event.key)
         if action is not None:
@@ -349,12 +349,12 @@ class BoltApp(App[None]):
     CSS_PATH = "styles.tcss"
     TITLE = "Bolt"
     BINDINGS = [
-        ("ctrl+c", "cancel_operation", "Cancel operation"),
-        ("ctrl+q", "quit", "Quit"),
-        ("ctrl+alt+s", "show_commands", "Show commands"),
-        ("ctrl+alt+m", "toggle_mode", "Change permission mode"),
-        ("ctrl+alt+t", "toggle_todo", "Toggle todos"),
-        ("ctrl+alt+i", "toggle_mouse", "Toggle interactive cursor"),
+        ("alt+c", "cancel_operation", "Cancel operation"),
+        ("alt+q", "quit", "Quit"),
+        ("alt+s", "show_commands", "Show commands"),
+        ("alt+m", "toggle_mode", "Change permission mode"),
+        ("alt+t", "toggle_todo", "Toggle todos"),
+        ("alt+i", "toggle_mouse", "Toggle interactive cursor"),
         ("f2", "select_theme", "Choose theme"),
         ("f3", "toggle_mode", "Change permission mode"),
         ("f4", "toggle_todo", "Toggle todos"),
