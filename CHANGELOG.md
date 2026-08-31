@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.13
+
+- Restore the standard shortcut footer and remove the top-left shortcut bar.
+- Show the current working directory immediately above the footer.
+- Improve Alt shortcut handling for VS Code terminal events.
+
+
 ## 1.1.12
 
 - Display shortcut operation names before their key combinations consistently.

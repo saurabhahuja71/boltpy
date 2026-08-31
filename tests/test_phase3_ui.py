@@ -156,7 +156,7 @@ async def test_current_working_directory_is_visible_near_top_of_screen():
     async with app.run_test():
         cwd = app.query_one("#cwd", Static)
         assert str(cwd.render()) == f"CWD: {Path.cwd()}"
-        assert cwd.region.y < app.query_one("#transcript").region.y
+        assert cwd.region.y > app.query_one("#transcript").region.y
 
 
 @pytest.mark.asyncio

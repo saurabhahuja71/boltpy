@@ -174,6 +174,8 @@ class PromptTextArea(TextArea):
                     getattr(self.app, f"action_{action}")()
                 return
         action = shortcut_actions.get(event.key)
+        if action is None and getattr(event, "character", None):
+            action = shortcut_actions.get(f"alt+{event.character.lower()}")
         if action is not None:
             event.stop(); event.prevent_default()
             if action == "show_commands" and not self.text:
@@ -420,8 +422,6 @@ class BoltApp(App[None]):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Container(id="main"):
-            yield Static(f"CWD: {self.settings.workspace}", id="cwd")
-            yield Static(_SHORTCUT_HELP, id="shortcut-help")
             with Horizontal(id="content"):
                 yield ConversationLog(id="transcript")
                 yield TodoPanel()
@@ -431,6 +431,7 @@ class BoltApp(App[None]):
             yield Static("", id="status")
             yield PromptTextArea(placeholder="Ask Bolt anything… (Enter to send, Shift+Enter for newline)", id="prompt")
             yield Static("", id="command-suggestions")
+            yield Static(f"CWD: {self.settings.workspace}", id="cwd")
         # Keep the cancel action first and compact so it remains visible in
         # narrow terminals instead of scrolling off the footer.
         yield Footer(show_command_palette=False, compact=True)
