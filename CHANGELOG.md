@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.9
+
+- Remap MATE-safe Alt shortcuts to keys confirmed to pass through the terminal.
+
+
 ## 1.1.8
 
 - Handle MATE Terminal Alt shortcuts emitted as ESC plus a letter.

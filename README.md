@@ -166,9 +166,9 @@ The TUI has a single chat transcript on the left with a collapsible todo side pa
 
 | Shortcut | Action |
 | --- | --- |
-| `Alt+S` | Show all commands and shortcuts |
-| `Alt+M` | Cycle permission mode: ASK → ALLOW → PLAN |
-| `Alt+T` | Toggle the todo panel |
+| `Alt+R` | Show all commands and shortcuts |
+| `Alt+Y` | Cycle permission mode: ASK → ALLOW → PLAN |
+| `Alt+U` | Toggle the todo panel |
 | `Alt+I` | Toggle interactive cursor/mouse mode and native text selection |
 | `Alt+C` | Cancel the current task; queued prompts continue afterward |
 | `Alt+Q` | Quit |

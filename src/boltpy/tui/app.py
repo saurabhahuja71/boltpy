@@ -31,8 +31,8 @@ _COMMANDS = (
 )
 
 _SHORTCUT_HELP = (
-    "Shortcuts: Win+S commands · Win+M mode · Win+T todos · Win+I mouse · "
-    "Win+Q exit · Win+C cancel · F2 theme · F3/F4/F5 mode/todos/mouse"
+    "Shortcuts: Alt+R commands · Alt+Y mode · Alt+U todos · Alt+I mouse · "
+    "Alt+Q exit · Alt+C cancel · F2 theme · F3/F4/F5 mode/todos/mouse"
 )
 
 _HELP_TEXT = (
@@ -148,9 +148,9 @@ class PromptTextArea(TextArea):
         # Terminals can deliver the Windows/Super key as a widget key (or use the
         # meta spelling), bypassing App.BINDINGS.
         shortcut_actions = {
-            "alt+s": "show_commands", "meta+s": "show_commands",
-            "alt+m": "toggle_mode", "meta+m": "toggle_mode",
-            "alt+t": "toggle_todo", "meta+t": "toggle_todo",
+            "alt+r": "show_commands", "meta+r": "show_commands",
+            "alt+y": "toggle_mode", "meta+y": "toggle_mode",
+            "alt+u": "toggle_todo", "meta+u": "toggle_todo",
             "alt+i": "toggle_mouse", "meta+i": "toggle_mouse",
             "alt+q": "quit", "meta+q": "quit",
             "alt+c": "cancel_operation", "meta+c": "cancel_operation",
@@ -162,7 +162,7 @@ class PromptTextArea(TextArea):
             event.stop(); event.prevent_default(); return
         if getattr(self, "_alt_prefix", False):
             self._alt_prefix = False
-            action = {"s": "show_commands", "m": "toggle_mode", "t": "toggle_todo", "i": "toggle_mouse", "q": "quit", "c": "cancel_operation"}.get(event.key.lower())
+            action = {"r": "show_commands", "y": "toggle_mode", "u": "toggle_todo", "i": "toggle_mouse", "q": "quit", "c": "cancel_operation"}.get(event.key.lower())
             if action is not None:
                 event.stop(); event.prevent_default()
                 if action == "show_commands" and not self.text:
@@ -379,9 +379,9 @@ class BoltApp(App[None]):
     BINDINGS = [
         ("alt+c", "cancel_operation", "Cancel operation"),
         ("alt+q", "quit", "Quit"),
-        ("alt+s", "show_commands", "Show commands"),
-        ("alt+m", "toggle_mode", "Change permission mode"),
-        ("alt+t", "toggle_todo", "Toggle todos"),
+        ("alt+r", "show_commands", "Show commands"),
+        ("alt+y", "toggle_mode", "Change permission mode"),
+        ("alt+u", "toggle_todo", "Toggle todos"),
         ("alt+i", "toggle_mouse", "Toggle interactive cursor"),
         ("f2", "select_theme", "Choose theme"),
         ("f3", "toggle_mode", "Change permission mode"),

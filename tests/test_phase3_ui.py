@@ -72,12 +72,12 @@ async def test_help_documents_phase3_commands_and_controls():
         assert app.query_one(PermissionPrompt).display is False
 
 @pytest.mark.asyncio
-async def test_alt_s_shows_all_commands_without_vscode_palette_conflict():
+async def test_alt_r_shows_all_commands_without_vscode_palette_conflict():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
-        await pilot.press("alt+s")
+        await pilot.press("alt+r")
         await pilot.pause()
-        assert ("alt+s", "show_commands", "Show commands") in app.BINDINGS
+        assert ("alt+r", "show_commands", "Show commands") in app.BINDINGS
         rendered = str(app.query_one(ConversationLog).children[-1].render())
         assert "/permissions remove <command>" in rendered
         assert "Win+S commands" in rendered
@@ -93,25 +93,25 @@ async def test_cancel_shortcut_is_first_in_compact_footer():
         assert not footer.show_command_palette
 
 @pytest.mark.asyncio
-async def test_alt_m_cycles_permission_modes():
+async def test_alt_y_cycles_permission_modes():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
         assert app.permissions.mode.value == "ask"
-        await pilot.press("alt+m")
+        await pilot.press("alt+y")
         assert app.permissions.mode.value == "allow"
-        await pilot.press("alt+m")
+        await pilot.press("alt+y")
         assert app.permissions.mode.value == "plan"
-        await pilot.press("alt+m")
+        await pilot.press("alt+y")
         assert app.permissions.mode.value == "ask"
-        assert ("alt+m", "toggle_mode", "Change permission mode") in app.BINDINGS
-        assert ("alt+t", "toggle_todo", "Toggle todos") in app.BINDINGS
+        assert ("alt+y", "toggle_mode", "Change permission mode") in app.BINDINGS
+        assert ("alt+u", "toggle_todo", "Toggle todos") in app.BINDINGS
         assert ("alt+i", "toggle_mouse", "Toggle interactive cursor") in app.BINDINGS
 
 @pytest.mark.asyncio
-async def test_alt_s_shows_commands_when_prompt_is_empty():
+async def test_alt_r_shows_commands_when_prompt_is_empty():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
-        await pilot.press("alt+s")
+        await pilot.press("alt+r")
         await pilot.pause()
         assert "/help  show commands and controls" in str(app.query_one(ConversationLog).children[-1].render())
 
