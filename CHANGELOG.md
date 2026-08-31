@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.3
+
+- Handle Ctrl+Alt shortcuts directly from the prompt for MATE Terminal compatibility.
+
+
 ## 1.1.2
 
 - Made `bolt upgrade` stream download and installer progress live.

@@ -175,7 +175,7 @@ The TUI has a single chat transcript on the left with a collapsible todo side pa
 | `Enter` | Send the prompt |
 | `Shift+Enter` | Insert a newline |
 
-Run `/theme` or press `F2` to open the interactive dark/light selector. `F3`, `F4`, and `F5` switch permission mode, todos, and mouse mode. Function keys and slash commands work in VS Code and normal terminals; Ctrl+Alt shortcuts are also available where the terminal passes them through.
+Run `/theme` or press `F2` to open the interactive dark/light selector. `F3`, `F4`, and `F5` switch permission mode, todos, and mouse mode. Function keys and slash commands work in VS Code and normal terminals; Ctrl+Alt shortcuts are handled from the prompt as well as globally for better MATE Terminal compatibility.
 
 Prompts sent while a task is running are queued and run in order when it finishes; the status bar shows the number waiting and `/queue` lists them.
 

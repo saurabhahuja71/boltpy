@@ -133,10 +133,23 @@ class PromptTextArea(TextArea):
         def __init__(self, textarea: "PromptTextArea") -> None:
             super().__init__(); self.text = textarea.text
     async def _on_key(self, event: events.Key) -> None:
-        # Handle the command reference from the focused prompt so the shortcut
-        # is not lost to widget focus. Ctrl+Alt+S avoids VS Code's palette.
-        if event.key == "ctrl+alt+s" and not self.text:
-            event.stop(); event.prevent_default(); self.post_message(self.CommandsRequested()); return
+        # Handle app shortcuts in the focused prompt as well as global bindings.
+        # MATE Terminal can deliver Ctrl+Alt as a widget key (or use the
+        # ctrl+meta spelling), bypassing App.BINDINGS.
+        shortcut_actions = {
+            "ctrl+alt+s": "show_commands", "ctrl+meta+s": "show_commands",
+            "ctrl+alt+m": "toggle_mode", "ctrl+meta+m": "toggle_mode",
+            "ctrl+alt+t": "toggle_todo", "ctrl+meta+t": "toggle_todo",
+            "ctrl+alt+i": "toggle_mouse", "ctrl+meta+i": "toggle_mouse",
+        }
+        action = shortcut_actions.get(event.key)
+        if action is not None:
+            event.stop(); event.prevent_default()
+            if action == "show_commands" and not self.text:
+                self.post_message(self.CommandsRequested())
+            else:
+                getattr(self.app, f"action_{action}")()
+            return
         if event.key == "enter":
             event.stop(); event.prevent_default(); self.post_message(self.Submitted(self)); return
         if event.key == "shift+enter":
