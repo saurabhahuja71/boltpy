@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.7
+
+- Render slash-command suggestions directly below the prompt.
+
+
 ## 1.1.6
 
 - Show filtered slash-command suggestions while typing.

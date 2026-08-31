@@ -400,7 +400,6 @@ class BoltApp(App[None]):
         with Container(id="main"):
             yield Static(f"CWD: {self.settings.workspace}", id="cwd")
             yield Static(_SHORTCUT_HELP, id="shortcut-help")
-            yield Static("", id="command-suggestions")
             with Horizontal(id="content"):
                 yield ConversationLog(id="transcript")
                 yield TodoPanel()
@@ -409,6 +408,7 @@ class BoltApp(App[None]):
             yield OptionsPrompt()
             yield Static("", id="status")
             yield PromptTextArea(placeholder="Ask Bolt anything… (Enter to send, Shift+Enter for newline)", id="prompt")
+            yield Static("", id="command-suggestions")
         # Keep the cancel action first and compact so it remains visible in
         # narrow terminals instead of scrolling off the footer.
         yield Footer(show_command_palette=False, compact=True)
