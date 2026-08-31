@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.16
+
+- Map theme selection to Ctrl+B.
+
+
 ## 1.1.15
 
 - Use confirmed terminal Ctrl+C/L/G/P controls instead of unreliable Alt shortcuts.
