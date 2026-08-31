@@ -26,13 +26,8 @@ _TASK_ACTIONS = re.compile(r"\b(check|find|list|tell|show|run|stop|start|create|
 
 _COMMANDS = (
     "/help", "/mode", "/theme", "/model", "/models", "/todo", "/queue",
-    "/permissions", "/mouse", "/new", "/status", "/providers", "/context",
+    "/permissions", "/mouse", "/new", "/status", "/providers", "/provider", "/context",
     "/diff", "/init", "/compact", "/clear", "/quit", "/exit",
-)
-
-_SHORTCUT_HELP = (
-    "Shortcuts: Show commands Alt+R · Change permission mode Alt+Y · Toggle todos Alt+U · "
-    "Toggle interactive cursor Alt+I · Quit Alt+Q · Cancel operation Alt+C · Choose theme Alt+P"
 )
 
 _HELP_TEXT = (
@@ -56,6 +51,9 @@ _HELP_TEXT = (
     "/diff  show the current Git diff\n"
     "/init  create a BOLT.md instruction template\n"
     "/compact  trim old conversation messages\n"
+    "/clear  clear the visible conversation\n"
+    "/provider  show the active provider\n"
+    "/provider <name>  switch provider\n"
     "/quit  exit\n"
     "/exit  exit\n\n"
     "[bold]Keys[/bold]\n"
@@ -431,7 +429,6 @@ class BoltApp(App[None]):
             yield Static("", id="status")
             yield PromptTextArea(placeholder="Ask Bolt anything… (Enter to send, Shift+Enter for newline)", id="prompt")
             yield Static("", id="command-suggestions")
-            yield Static(f"CWD: {self.settings.workspace}", id="cwd")
         # Keep the cancel action first and compact so it remains visible in
         # narrow terminals instead of scrolling off the footer.
         yield Footer(show_command_palette=False, compact=True)

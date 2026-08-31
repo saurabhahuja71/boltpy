@@ -142,7 +142,7 @@ Configure available model names with `models` or `BOLT_MODELS`, then use `/model
 
 ## Terminal UI
 
-The TUI has a single chat transcript on the left with a collapsible todo side panel on the right; streaming text renders into the transcript, with the status bar and input at the bottom. It provides streaming Textual Markdown with syntax-highlighted fenced code, tables, lists, links, a CSS-variable theme system with dark/black theme by default, a live todo side panel, a numbered options picker with a typed answer, inline permission controls, a visible `CWD:` line at the top, and a status bar formatted as `Bolt | Mode: ASK/ALLOW/PLAN | Mouse: INTERACTIVE/SELECT | Model: provider/model | Tokens: n`.
+The TUI has a single chat transcript on the left with a collapsible todo side panel on the right; streaming text renders into the transcript, with the status bar and input at the bottom. It provides streaming Textual Markdown with syntax-highlighted fenced code, tables, lists, links, a CSS-variable theme system with dark/black theme by default, a live todo side panel, a numbered options picker with a typed answer, inline permission controls, and a status bar formatted as `Bolt | Mode: ASK/ALLOW/PLAN | Mouse: INTERACTIVE/SELECT | Model: provider/model | Tokens: n`.
 
 ### Chat commands
 
@@ -152,6 +152,7 @@ The TUI has a single chat transcript on the left with a collapsible todo side pa
 /mode ask|allow|plan
 /todo
 /queue
+/clear
 /permissions
 /theme
 /theme dark|light
@@ -175,7 +176,7 @@ The TUI has a single chat transcript on the left with a collapsible todo side pa
 | `Enter` | Send the prompt |
 | `Shift+Enter` | Insert a newline |
 
-The current working directory is shown immediately above the shortcut footer; the generated footer is hidden to avoid duplicate key-first labels so the controls are always visible. Slash-command suggestions appear directly below the prompt. Run `/theme` or press `F2` to open the interactive dark/light selector. `F3`, `F4`, and `F5` switch permission mode, todos, and mouse mode. Typing `/` shows filtered available commands. Function keys and slash commands work in VS Code and normal terminals; Alt shortcuts are handled from the prompt as well as globally for better MATE Terminal compatibility.
+The standard shortcut footer is shown at the bottom of the TUI. Slash-command suggestions appear directly below the prompt. Run `/theme` or press `Alt+P` to open the interactive dark/light selector. `F3`, `F4`, and `F5` switch permission mode, todos, and mouse mode. Typing `/` shows filtered available commands. Function keys and slash commands work in VS Code and normal terminals; Alt shortcuts are handled from the prompt as well as globally for better MATE Terminal compatibility.
 
 Prompts sent while a task is running are queued and run in order when it finishes; the status bar shows the number waiting and `/queue` lists them.
 

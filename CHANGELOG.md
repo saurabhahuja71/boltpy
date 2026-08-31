@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.14
+
+- Remove obsolete top-left helper and CWD display.
+- Restore the standard shortcut footer.
+- Document all implemented slash commands, including `/clear` and `/provider`.
+
+
 ## 1.1.13
 
 - Restore the standard shortcut footer and remove the top-left shortcut bar.

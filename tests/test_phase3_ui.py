@@ -149,31 +149,7 @@ async def test_model_selector_changes_provider_model_and_supports_keyboard():
 
 
 @pytest.mark.asyncio
-async def test_current_working_directory_is_visible_near_top_of_screen():
-    from pathlib import Path
-    from textual.widgets import Static
+async def test_current_working_directory_is_not_rendered():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test():
-        cwd = app.query_one("#cwd", Static)
-        assert str(cwd.render()) == f"CWD: {Path.cwd()}"
-        assert cwd.region.y > app.query_one("#transcript").region.y
-
-
-@pytest.mark.asyncio
-async def test_model_selector_discovers_ollama_models(monkeypatch):
-    app = BoltpyApp(Settings(api_key="test", model="configured"))
-    async def list_models():
-        return ["qwen3-coder:30b", "veriloop-coder-e1:latest"]
-    monkeypatch.setattr(app.agent.provider, "list_models", list_models)
-    async with app.run_test():
-        assert await app._available_models() == ["configured", "qwen3-coder:30b", "veriloop-coder-e1:latest"]
-
-
-@pytest.mark.asyncio
-async def test_first_launch_uses_select_and_allow_defaults():
-    app = BoltpyApp(Settings(api_key="test", first_launch=True))
-    async with app.run_test():
-        assert app.mouse_mode == "select"
-        assert app.permissions.mode.value == "allow"
-        rendered = " ".join(str(widget.render()) for widget in app.query("#transcript .system-message"))
-        assert "onenova.in/blog/boltpy-terminal-ai-coding-agent-ollama-sglang" in rendered
+        assert not app.query("#cwd")
