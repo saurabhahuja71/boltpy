@@ -24,9 +24,15 @@ from boltpy.agent.providers import build_provider
 _TODO_TOOLS = {"add_todo", "complete_todo", "update_todo", "list_todos"}
 _TASK_ACTIONS = re.compile(r"\b(check|find|list|tell|show|run|stop|start|create|update|fix|deploy|verify|remove|delete|build|test)\b", re.IGNORECASE)
 
+_COMMANDS = (
+    "/help", "/mode", "/theme", "/model", "/models", "/todo", "/queue",
+    "/permissions", "/mouse", "/new", "/status", "/providers", "/context",
+    "/diff", "/init", "/compact", "/clear", "/quit", "/exit",
+)
+
 _SHORTCUT_HELP = (
-    "Shortcuts: Alt+S commands · Alt+M mode · Alt+T todos · Alt+I mouse · "
-    "Alt+Q exit · Alt+C cancel · F2 theme · F3/F4/F5 mode/todos/mouse"
+    "Shortcuts: Win+S commands · Win+M mode · Win+T todos · Win+I mouse · "
+    "Win+Q exit · Win+C cancel · F2 theme · F3/F4/F5 mode/todos/mouse"
 )
 
 _HELP_TEXT = (
@@ -53,7 +59,7 @@ _HELP_TEXT = (
     "/quit  exit\n"
     "/exit  exit\n\n"
     "[bold]Keys[/bold]\n"
-    "Enter send · F2 theme · F3/Alt+M mode · F4/Alt+T todos · F5/Alt+I mouse · Alt+S commands · Alt+Q quit · Alt+C cancel\n"
+    "Enter send · F2 theme · F3/Win+M mode · F4/Win+T todos · F5/Win+I mouse · Win+S commands · Win+Q quit · Win+C cancel\n"
     "Permission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\n"
     "Type while a task is running to queue it; Alt+C cancels the current task."
 )
@@ -139,13 +145,13 @@ class PromptTextArea(TextArea):
             super().__init__(); self.text = textarea.text
     async def _on_key(self, event: events.Key) -> None:
         # Handle app shortcuts in the focused prompt as well as global bindings.
-        # MATE Terminal can deliver Alt as a widget key (or use the
+        # Terminals can deliver the Windows/Super key as a widget key (or use the
         # meta spelling), bypassing App.BINDINGS.
         shortcut_actions = {
-            "alt+s": "show_commands", "meta+s": "show_commands",
-            "alt+m": "toggle_mode", "meta+m": "toggle_mode",
-            "alt+t": "toggle_todo", "meta+t": "toggle_todo",
-            "alt+i": "toggle_mouse", "meta+i": "toggle_mouse",
+            "meta+s": "show_commands", "super+s": "show_commands",
+            "meta+m": "toggle_mode", "super+m": "toggle_mode",
+            "meta+t": "toggle_todo", "super+t": "toggle_todo",
+            "meta+i": "toggle_mouse", "super+i": "toggle_mouse",
         }
         action = shortcut_actions.get(event.key)
         if action is not None:
@@ -354,12 +360,12 @@ class BoltApp(App[None]):
     CSS_PATH = "styles.tcss"
     TITLE = "Bolt"
     BINDINGS = [
-        ("alt+c", "cancel_operation", "Cancel operation"),
-        ("alt+q", "quit", "Quit"),
-        ("alt+s", "show_commands", "Show commands"),
-        ("alt+m", "toggle_mode", "Change permission mode"),
-        ("alt+t", "toggle_todo", "Toggle todos"),
-        ("alt+i", "toggle_mouse", "Toggle interactive cursor"),
+        ("meta+c", "cancel_operation", "Cancel operation"),
+        ("meta+q", "quit", "Quit"),
+        ("meta+s", "show_commands", "Show commands"),
+        ("meta+m", "toggle_mode", "Change permission mode"),
+        ("meta+t", "toggle_todo", "Toggle todos"),
+        ("meta+i", "toggle_mouse", "Toggle interactive cursor"),
         ("f2", "select_theme", "Choose theme"),
         ("f3", "toggle_mode", "Change permission mode"),
         ("f4", "toggle_todo", "Toggle todos"),
@@ -394,6 +400,7 @@ class BoltApp(App[None]):
         with Container(id="main"):
             yield Static(f"CWD: {self.settings.workspace}", id="cwd")
             yield Static(_SHORTCUT_HELP, id="shortcut-help")
+            yield Static("", id="command-suggestions")
             with Horizontal(id="content"):
                 yield ConversationLog(id="transcript")
                 yield TodoPanel()
@@ -569,6 +576,24 @@ class BoltApp(App[None]):
             self._write(f"Active model: [bold]{message.model}[/bold]", markup=True)
             self._set_status("Ready")
         self.query_one("#prompt", PromptTextArea).focus()
+
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        if event.text_area.id != "prompt":
+            return
+        value = event.text_area.text.strip().lower()
+        try:
+            suggestions = self.query_one("#command-suggestions", Static)
+        except Exception:
+            # Textual can emit an initial Changed event while compose() is
+            # still mounting the rest of the screen.
+            return
+        if value.startswith("/") and " " not in value:
+            matches = [command for command in _COMMANDS if command.startswith(value)]
+            suggestions.update("Commands: " + "  ".join(matches) if matches else "No matching commands")
+            suggestions.display = True
+        else:
+            suggestions.update("")
+            suggestions.display = False
 
     async def on_prompt_text_area_submitted(self, event: PromptTextArea.Submitted) -> None: await self._submit_prompt(event.text)
 

@@ -2,6 +2,7 @@ Screen { background: $background; color: $text; }
 #main { height: 1fr; padding: 0; }
 #cwd { height: 1; color: $text-muted; padding: 0 1; text-overflow: ellipsis; }
 #shortcut-help { height: 1; color: $text-muted; padding: 0 1; text-overflow: ellipsis; }
+#command-suggestions { display: none; height: 1; color: $primary; padding: 0 1; text-overflow: ellipsis; }
 #content { height: 1fr; }
 #transcript { width: 1fr; height: 1fr; border: none; background: $surface; padding: 0 1; scrollbar-color: $text-disabled; }
 #status { height: 1; color: $text-muted; padding: 0 1; }

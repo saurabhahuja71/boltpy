@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.6
+
+- Show filtered slash-command suggestions while typing.
+- Use Windows/Super-key shortcuts instead of Alt shortcuts.
+
+
 ## 1.1.5
 
 - Print the active Alt and function-key shortcuts in the TUI shortcut bar.
