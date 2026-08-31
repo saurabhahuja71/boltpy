@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.5
+
+- Print the active Alt and function-key shortcuts in the TUI shortcut bar.
+
+
 ## 1.1.4
 
 - Use Alt-only application shortcuts for consistent terminal behavior.

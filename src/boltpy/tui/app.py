@@ -24,6 +24,11 @@ from boltpy.agent.providers import build_provider
 _TODO_TOOLS = {"add_todo", "complete_todo", "update_todo", "list_todos"}
 _TASK_ACTIONS = re.compile(r"\b(check|find|list|tell|show|run|stop|start|create|update|fix|deploy|verify|remove|delete|build|test)\b", re.IGNORECASE)
 
+_SHORTCUT_HELP = (
+    "Shortcuts: Alt+S commands · Alt+M mode · Alt+T todos · Alt+I mouse · "
+    "Alt+Q exit · Alt+C cancel · F2 theme · F3/F4/F5 mode/todos/mouse"
+)
+
 _HELP_TEXT = (
     "[bold]Commands[/bold]\n"
     "/help  show commands and controls\n"
@@ -388,6 +393,7 @@ class BoltApp(App[None]):
         yield Header(show_clock=True)
         with Container(id="main"):
             yield Static(f"CWD: {self.settings.workspace}", id="cwd")
+            yield Static(_SHORTCUT_HELP, id="shortcut-help")
             with Horizontal(id="content"):
                 yield ConversationLog(id="transcript")
                 yield TodoPanel()
