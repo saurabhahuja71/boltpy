@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.19
+
+- Include `/remap` in slash-command suggestions.
+- Ensure `/remap` lists the default Ctrl+Y permission-mode shortcut.
+
+
 ## 1.1.18
 
 - Add `/remap` to change, list, and reset live keyboard shortcuts.

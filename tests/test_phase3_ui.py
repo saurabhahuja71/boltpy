@@ -118,6 +118,21 @@ async def test_alt_y_cycles_permission_modes():
         assert ("ctrl+l", "toggle_mouse", "Toggle mouse mode") in app.BINDINGS
 
 @pytest.mark.asyncio
+async def test_remap_is_suggested_and_lists_ctrl_y():
+    app = BoltpyApp(Settings(api_key="test"))
+    async with app.run_test() as pilot:
+        prompt = app.query_one("#prompt")
+        prompt.text = "/rem"
+        await pilot.pause()
+        assert "/remap" in str(app.query_one("#command-suggestions").render())
+
+        prompt.text = "/remap"
+        await pilot.press("enter")
+        await pilot.pause()
+        rendered = str(app.query_one(ConversationLog).children[-1].render())
+        assert "ctrl+y  Change permission mode" in rendered
+
+@pytest.mark.asyncio
 async def test_alt_r_shows_commands_when_prompt_is_empty():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:

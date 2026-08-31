@@ -27,7 +27,7 @@ _TASK_ACTIONS = re.compile(r"\b(check|find|list|tell|show|run|stop|start|create|
 _COMMANDS = (
     "/help", "/mode", "/theme", "/model", "/models", "/todo", "/queue",
     "/permissions", "/mouse", "/new", "/status", "/providers", "/provider", "/context",
-    "/diff", "/init", "/compact", "/clear", "/quit", "/exit",
+    "/diff", "/init", "/compact", "/clear", "/remap", "/quit", "/exit",
 )
 
 _HELP_TEXT = (
