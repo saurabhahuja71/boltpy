@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.8
+
+- Handle MATE Terminal Alt shortcuts emitted as ESC plus a letter.
+
+
 ## 1.1.7
 
 - Render slash-command suggestions directly below the prompt.

@@ -148,11 +148,28 @@ class PromptTextArea(TextArea):
         # Terminals can deliver the Windows/Super key as a widget key (or use the
         # meta spelling), bypassing App.BINDINGS.
         shortcut_actions = {
-            "meta+s": "show_commands", "super+s": "show_commands",
-            "meta+m": "toggle_mode", "super+m": "toggle_mode",
-            "meta+t": "toggle_todo", "super+t": "toggle_todo",
-            "meta+i": "toggle_mouse", "super+i": "toggle_mouse",
+            "alt+s": "show_commands", "meta+s": "show_commands",
+            "alt+m": "toggle_mode", "meta+m": "toggle_mode",
+            "alt+t": "toggle_todo", "meta+t": "toggle_todo",
+            "alt+i": "toggle_mouse", "meta+i": "toggle_mouse",
+            "alt+q": "quit", "meta+q": "quit",
+            "alt+c": "cancel_operation", "meta+c": "cancel_operation",
         }
+        # MATE Terminal emits Alt+letter as ESC followed by the letter
+        # (for example ^[m), rather than a named alt+m key event.
+        if event.key == "escape":
+            self._alt_prefix = True
+            event.stop(); event.prevent_default(); return
+        if getattr(self, "_alt_prefix", False):
+            self._alt_prefix = False
+            action = {"s": "show_commands", "m": "toggle_mode", "t": "toggle_todo", "i": "toggle_mouse", "q": "quit", "c": "cancel_operation"}.get(event.key.lower())
+            if action is not None:
+                event.stop(); event.prevent_default()
+                if action == "show_commands" and not self.text:
+                    self.post_message(self.CommandsRequested())
+                else:
+                    getattr(self.app, f"action_{action}")()
+                return
         action = shortcut_actions.get(event.key)
         if action is not None:
             event.stop(); event.prevent_default()
@@ -360,12 +377,12 @@ class BoltApp(App[None]):
     CSS_PATH = "styles.tcss"
     TITLE = "Bolt"
     BINDINGS = [
-        ("meta+c", "cancel_operation", "Cancel operation"),
-        ("meta+q", "quit", "Quit"),
-        ("meta+s", "show_commands", "Show commands"),
-        ("meta+m", "toggle_mode", "Change permission mode"),
-        ("meta+t", "toggle_todo", "Toggle todos"),
-        ("meta+i", "toggle_mouse", "Toggle interactive cursor"),
+        ("alt+c", "cancel_operation", "Cancel operation"),
+        ("alt+q", "quit", "Quit"),
+        ("alt+s", "show_commands", "Show commands"),
+        ("alt+m", "toggle_mode", "Change permission mode"),
+        ("alt+t", "toggle_todo", "Toggle todos"),
+        ("alt+i", "toggle_mouse", "Toggle interactive cursor"),
         ("f2", "select_theme", "Choose theme"),
         ("f3", "toggle_mode", "Change permission mode"),
         ("f4", "toggle_todo", "Toggle todos"),
