@@ -29,7 +29,8 @@ _HELP_TEXT = (
     "/help  show commands and controls\n"
     "/mode  inspect permission mode\n"
     "/mode ask|allow|plan  change permission mode\n"
-    "/theme dark|light  switch theme\n"
+    "/theme  choose a theme\n"
+    "/theme dark|light  switch theme directly\n"
     "/model  choose the active configured model\n"
     "/models  list models from the active provider\n"
     "/todo  toggle the todo panel\n"
@@ -44,9 +45,10 @@ _HELP_TEXT = (
     "/diff  show the current Git diff\n"
     "/init  create a BOLT.md instruction template\n"
     "/compact  trim old conversation messages\n"
-    "/quit  exit\n\n"
+    "/quit  exit\n"
+    "/exit  exit\n\n"
     "[bold]Keys[/bold]\n"
-    "Enter send · Ctrl+Shift+S commands · Ctrl+Shift+M mode · Ctrl+Shift+T todos · Ctrl+Shift+I interactive cursor · Ctrl+Q quit · Ctrl+C cancel\n"
+    "Enter send · F2 theme · F3/Ctrl+Alt+M mode · F4/Ctrl+Alt+T todos · F5/Ctrl+Alt+I mouse · Ctrl+Alt+S commands · Ctrl+Q quit · Ctrl+C cancel\n"
     "Permission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\n"
     "Type while a task is running to queue it; Ctrl+C cancels the current task."
 )
@@ -132,8 +134,8 @@ class PromptTextArea(TextArea):
             super().__init__(); self.text = textarea.text
     async def _on_key(self, event: events.Key) -> None:
         # Handle the command reference from the focused prompt so the shortcut
-        # is not lost to widget focus. Ctrl+Shift+S avoids VS Code's palette.
-        if event.key == "ctrl+shift+s" and not self.text:
+        # is not lost to widget focus. Ctrl+Alt+S avoids VS Code's palette.
+        if event.key == "ctrl+alt+s" and not self.text:
             event.stop(); event.prevent_default(); self.post_message(self.CommandsRequested()); return
         if event.key == "enter":
             event.stop(); event.prevent_default(); self.post_message(self.Submitted(self)); return
@@ -336,14 +338,18 @@ class BoltApp(App[None]):
     BINDINGS = [
         ("ctrl+c", "cancel_operation", "Cancel operation"),
         ("ctrl+q", "quit", "Quit"),
-        ("ctrl+shift+s", "show_commands", "Show commands"),
-        ("ctrl+shift+m", "toggle_mode", "Change permission mode"),
-        ("ctrl+shift+t", "toggle_todo", "Toggle todos"),
-        ("ctrl+shift+i", "toggle_mouse", "Toggle interactive cursor"),
+        ("ctrl+alt+s", "show_commands", "Show commands"),
+        ("ctrl+alt+m", "toggle_mode", "Change permission mode"),
+        ("ctrl+alt+t", "toggle_todo", "Toggle todos"),
+        ("ctrl+alt+i", "toggle_mouse", "Toggle interactive cursor"),
+        ("f2", "select_theme", "Choose theme"),
+        ("f3", "toggle_mode", "Change permission mode"),
+        ("f4", "toggle_todo", "Toggle todos"),
+        ("f5", "toggle_mouse", "Toggle mouse mode"),
     ]
 
     def __init__(self, settings: Settings) -> None:
-        super().__init__(); self.settings = settings; self.settings.workspace = settings.workspace.resolve(); self.session_store = SessionStore(self.settings.workspace); self.busy = False; self.theme_name = "light"; self.mouse_mode = "interactive"
+        super().__init__(); self.settings = settings; self.settings.workspace = settings.workspace.resolve(); self.session_store = SessionStore(self.settings.workspace); self.busy = False; self.theme_name = "dark"; self.mouse_mode = "interactive"
         self._prompt_queue: list[str] = []
         self._permission_future: asyncio.Future[PermissionDecision] | None = None
         self._options_future: asyncio.Future[str] | None = None
@@ -382,7 +388,7 @@ class BoltApp(App[None]):
         yield Footer(show_command_palette=False, compact=True)
 
     def on_mount(self) -> None:
-        self._apply_theme(self.settings.theme if self.settings.theme in {"dark", "light"} else "light")
+        self._apply_theme(self.settings.theme if self.settings.theme in {"dark", "light"} else "dark")
         # Widget interaction is the default; switch to native terminal selection
         # explicitly when dragging to select/copy text is needed.
         if self.settings.first_launch:
@@ -450,6 +456,7 @@ class BoltApp(App[None]):
         if theme in {"dark", "light"}:
             self.theme = theme
             self.theme_name = theme
+            self.settings.theme = theme
 
     def action_cancel_operation(self) -> None:
         """Cancel the active model or tool worker."""
@@ -464,6 +471,18 @@ class BoltApp(App[None]):
 
     def on_prompt_text_area_commands_requested(self, event: PromptTextArea.CommandsRequested) -> None:
         self.action_show_commands()
+
+    def action_select_theme(self) -> None:
+        """Open the terminal-safe theme selector."""
+        self.run_worker(self._select_theme(), exclusive=False)
+
+    async def _select_theme(self) -> None:
+        selected = await self._request_options("Select theme", ["dark", "light"], allow_custom=False)
+        if selected in {"dark", "light"}:
+            self._apply_theme(selected)
+            self._write(f"Active theme: [bold]{selected}[/bold]", markup=True)
+            self._set_status("Ready")
+        self.query_one("#prompt", PromptTextArea).focus()
 
     def action_toggle_mouse(self) -> None:
         self._set_mouse_mode("select" if self.mouse_mode == "interactive" else "interactive")
@@ -545,7 +564,7 @@ class BoltApp(App[None]):
             self._set_status(f"Queued ({len(self._prompt_queue)} waiting)")
             return
         self.query_one("#prompt", PromptTextArea).text = ""
-        if prompt == "/quit": self.exit()
+        if prompt in {"/quit", "/exit"}: self.exit()
         elif prompt == "/new": self.agent.reset(); self._write("[dim]Started a new conversation.[/dim]", markup=True)
         elif prompt == "/context": self._write(project_context(self.settings.workspace))
         elif prompt == "/providers" or prompt == "/provider": self._write(f"Active provider: {self.settings.provider}")
@@ -607,7 +626,7 @@ class BoltApp(App[None]):
             mode = prompt.partition(" ")[2].strip()
             if mode not in {"ask", "allow", "plan"}: self._write("[bold red]Usage:[/bold red] /mode ask|allow|plan", markup=True)
             else: self.agent.set_permission_mode(PermissionMode(mode)); self._set_status("Ready")
-        elif prompt == "/theme": self._write(f"Current theme: {self.theme_name}")
+        elif prompt == "/theme": self.action_select_theme()
         elif prompt == "/mouse": self._write(f"Current mouse mode: {self.mouse_mode} (interactive is the default; use /mouse select for native selection)")
         elif prompt.startswith("/mouse "):
             mouse_mode = prompt.partition(" ")[2].strip().lower()
@@ -619,7 +638,7 @@ class BoltApp(App[None]):
         elif prompt.startswith("/theme "):
             theme = prompt.partition(" ")[2].strip().lower()
             if theme not in {"dark", "light"}: self._write("[bold red]Usage:[/bold red] /theme dark|light", markup=True)
-            else: self._apply_theme(theme); self._set_status("Ready")
+            else: self._apply_theme(theme); self._write(f"Active theme: [bold]{theme}[/bold]", markup=True); self._set_status("Ready")
         else: self._active_worker = self._ask(prompt)
 
     @work(exclusive=True)

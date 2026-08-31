@@ -90,7 +90,7 @@ bolt --model qwen3-coder
 bolt --provider ollama --endpoint http://localhost:11434
 bolt doctor
 
-For development, use pip install -e . or uv run bolt.
+For development, use pip install -e . or uv run bolt. To upgrade an existing installation in place, run `bolt upgrade`; it uses the same user-local installer as the curl command.
 
 Set `OPENAI_API_KEY` for OpenAI or point `OPENAI_BASE_URL` at an OpenAI-compatible service. Bolt reads configuration in this order: defaults, `~/.config/boltpy/config.toml`, local `bolt.toml`, then environment variables.
 
@@ -100,7 +100,7 @@ model = "gpt-4o-mini"
 # Optional selector entries; the active model is always included.
 models = ["gpt-4o-mini", "local-model"]
 permission_mode = "ask"
-theme = "light"
+theme = "dark"
 ```
 
 Equivalent environment variables include `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `BOLT_PROVIDER`, `BOLT_MODELS` (comma-separated), `BOLT_PERMISSION_MODE`, and `BOLT_THEME`.
@@ -142,7 +142,7 @@ Configure available model names with `models` or `BOLT_MODELS`, then use `/model
 
 ## Terminal UI
 
-The TUI has a single chat transcript on the left with a collapsible todo side panel on the right; streaming text renders into the transcript, with the status bar and input at the bottom. It provides streaming Textual Markdown with syntax-highlighted fenced code, tables, lists, links, a CSS-variable theme system with light theme by default, a live todo side panel, a numbered options picker with a typed answer, inline permission controls, a visible `CWD:` line at the top, and a status bar formatted as `Bolt | Mode: ASK/ALLOW/PLAN | Mouse: INTERACTIVE/SELECT | Model: provider/model | Tokens: n`.
+The TUI has a single chat transcript on the left with a collapsible todo side panel on the right; streaming text renders into the transcript, with the status bar and input at the bottom. It provides streaming Textual Markdown with syntax-highlighted fenced code, tables, lists, links, a CSS-variable theme system with dark/black theme by default, a live todo side panel, a numbered options picker with a typed answer, inline permission controls, a visible `CWD:` line at the top, and a status bar formatted as `Bolt | Mode: ASK/ALLOW/PLAN | Mouse: INTERACTIVE/SELECT | Model: provider/model | Tokens: n`.
 
 ### Chat commands
 
@@ -153,28 +153,33 @@ The TUI has a single chat transcript on the left with a collapsible todo side pa
 /todo
 /queue
 /permissions
+/theme
 /theme dark|light
 /mouse interactive|select
 /new
 /quit
+/exit
+/upgrade (CLI)
 ```
 
 ### Keyboard shortcuts
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl+Shift+S` | Show all commands and shortcuts |
-| `Ctrl+Shift+M` | Cycle permission mode: ASK → ALLOW → PLAN |
-| `Ctrl+Shift+T` | Toggle the todo panel |
-| `Ctrl+Shift+I` | Toggle interactive cursor/mouse mode and native text selection |
+| `Ctrl+Alt+S` | Show all commands and shortcuts |
+| `Ctrl+Alt+M` | Cycle permission mode: ASK → ALLOW → PLAN |
+| `Ctrl+Alt+T` | Toggle the todo panel |
+| `Ctrl+Alt+I` | Toggle interactive cursor/mouse mode and native text selection |
 | `Ctrl+C` | Cancel the current task; queued prompts continue afterward |
 | `Ctrl+Q` | Quit |
 | `Enter` | Send the prompt |
 | `Shift+Enter` | Insert a newline |
 
+Run `/theme` or press `F2` to open the interactive dark/light selector. `F3`, `F4`, and `F5` switch permission mode, todos, and mouse mode. Function keys and slash commands work in VS Code and normal terminals; Ctrl+Alt shortcuts are also available where the terminal passes them through.
+
 Prompts sent while a task is running are queued and run in order when it finishes; the status bar shows the number waiting and `/queue` lists them.
 
-Text selection and clipboard behavior remain terminal-native. Interactive cursor mode is the default: mouse clicks and scrolling work on widgets such as permission/model buttons. Use `/mouse select` or `Ctrl+Shift+I` when you need native terminal selection — drag across conversation text and use the terminal’s copy/paste shortcuts, commonly Ctrl+Shift+C / Ctrl+Shift+V or Shift+Insert — then return with `/mouse interactive` or `Ctrl+Shift+I`.
+Text selection and clipboard behavior remain terminal-native. Interactive cursor mode is the default: mouse clicks and scrolling work on widgets such as permission/model buttons. Use `/mouse select` or `Ctrl+Alt+I` when you need native terminal selection — drag across conversation text and use the terminal’s copy/paste shortcuts, commonly Ctrl+Shift+C / Ctrl+Shift+V or Shift+Insert — then return with `/mouse interactive` or `Ctrl+Alt+I`.
 
 ### Example prompts
 

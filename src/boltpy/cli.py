@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import importlib.metadata
 from pathlib import Path
+import subprocess
+import urllib.request
 import typer
 from boltpy.agent.core import Agent
 from boltpy.config import load_settings
@@ -72,6 +74,21 @@ def ask(prompt: str = typer.Argument(...), debug: bool = typer.Option(False, "--
 def exec_command(prompt: str = typer.Argument(...), debug: bool = typer.Option(False, "--debug"), model: str | None = typer.Option(None, "--model"), provider: str | None = typer.Option(None, "--provider")) -> None:
     """Run a prompt headlessly with tools allowed."""
     _run_prompt(prompt, allow_tools=True, debug=debug, model=model, provider=provider)
+
+@app.command()
+def upgrade() -> None:
+    """Upgrade Bolt to the latest version from GitHub."""
+    installer_url = "https://raw.githubusercontent.com/saurabhahuja71/boltpy/main/install.sh"
+    try:
+        with urllib.request.urlopen(installer_url, timeout=30) as response:
+            installer = response.read()
+        result = subprocess.run(["bash"], input=installer, check=False)
+    except Exception as error:
+        typer.echo(f"bolt: upgrade failed: {error}", err=True)
+        raise typer.Exit(code=1) from error
+    if result.returncode != 0:
+        raise typer.Exit(code=result.returncode)
+
 
 @app.command()
 def doctor() -> None:

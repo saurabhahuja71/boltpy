@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from textual.widgets import Footer, Markdown
 from boltpy.config import Settings
-from boltpy.tui.app import BoltpyApp, ConversationLog, ModelPrompt, PermissionPrompt, render_markdown
+from boltpy.tui.app import BoltpyApp, ConversationLog, ModelPrompt, OptionsPrompt, PermissionPrompt, render_markdown
 
 
 def test_markdown_renderer_returns_textual_markdown_for_common_content():
@@ -29,11 +29,27 @@ async def test_theme_command_switches_screen_immediately():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test():
         assert app.mouse_mode == "interactive"
-        assert app.theme_name == "light"
+        assert app.theme_name == "dark"
+        assert app.settings.theme == "dark"
         await app._submit_prompt("/theme light")
         assert app.theme_name == "light"
         await app._submit_prompt("/theme dark")
         assert app.theme_name == "dark"
+
+
+@pytest.mark.asyncio
+async def test_theme_command_opens_picker_and_applies_selection():
+    app = BoltpyApp(Settings(api_key="test"))
+    async with app.run_test() as pilot:
+        await app._submit_prompt("/theme")
+        await pilot.pause()
+        picker = app.query_one(OptionsPrompt)
+        assert picker.display
+        await pilot.press("down", "enter")
+        await pilot.pause()
+        assert app.theme_name == "light"
+        assert not picker.display
+
 
 @pytest.mark.asyncio
 async def test_help_documents_phase3_commands_and_controls():
@@ -47,13 +63,13 @@ async def test_help_documents_phase3_commands_and_controls():
 async def test_ctrl_shift_s_shows_all_commands_without_vscode_palette_conflict():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
-        await pilot.press("ctrl+shift+s")
+        await pilot.press("ctrl+alt+s")
         await pilot.pause()
-        assert ("ctrl+shift+s", "show_commands", "Show commands") in app.BINDINGS
+        assert ("ctrl+alt+s", "show_commands", "Show commands") in app.BINDINGS
         rendered = str(app.query_one(ConversationLog).children[-1].render())
         assert "/permissions remove <command>" in rendered
-        assert "Ctrl+Shift+S commands" in rendered
-        assert "Ctrl+Shift+M mode" in rendered
+        assert "Ctrl+Alt+S commands" in rendered
+        assert "F3/Ctrl+Alt+M mode" in rendered
 
 @pytest.mark.asyncio
 async def test_cancel_shortcut_is_first_in_compact_footer():
@@ -69,21 +85,21 @@ async def test_ctrl_shift_m_cycles_permission_modes():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
         assert app.permissions.mode.value == "ask"
-        await pilot.press("ctrl+shift+m")
+        await pilot.press("ctrl+alt+m")
         assert app.permissions.mode.value == "allow"
-        await pilot.press("ctrl+shift+m")
+        await pilot.press("ctrl+alt+m")
         assert app.permissions.mode.value == "plan"
-        await pilot.press("ctrl+shift+m")
+        await pilot.press("ctrl+alt+m")
         assert app.permissions.mode.value == "ask"
-        assert ("ctrl+shift+m", "toggle_mode", "Change permission mode") in app.BINDINGS
-        assert ("ctrl+shift+t", "toggle_todo", "Toggle todos") in app.BINDINGS
-        assert ("ctrl+shift+i", "toggle_mouse", "Toggle interactive cursor") in app.BINDINGS
+        assert ("ctrl+alt+m", "toggle_mode", "Change permission mode") in app.BINDINGS
+        assert ("ctrl+alt+t", "toggle_todo", "Toggle todos") in app.BINDINGS
+        assert ("ctrl+alt+i", "toggle_mouse", "Toggle interactive cursor") in app.BINDINGS
 
 @pytest.mark.asyncio
 async def test_ctrl_shift_s_shows_commands_when_prompt_is_empty():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
-        await pilot.press("ctrl+shift+s")
+        await pilot.press("ctrl+alt+s")
         await pilot.pause()
         assert "/help  show commands and controls" in str(app.query_one(ConversationLog).children[-1].render())
 

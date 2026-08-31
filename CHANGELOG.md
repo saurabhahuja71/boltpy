@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.1
+
+- Added a dark/black default theme and interactive `/theme` selector.
+- Added terminal-safe F2-F5 shortcuts plus Ctrl+Alt aliases for VS Code and normal terminals.
+- Added `/exit` as an alias for `/quit`.
+- Added the built-in `bolt upgrade` command.
+
+
 ## 1.1.0
 
 ### What's New
