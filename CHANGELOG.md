@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.15
+
+- Use confirmed terminal Ctrl+C/L/G/P controls instead of unreliable Alt shortcuts.
+- Restore normal typing by removing ESC-prefix shortcut parsing.
+
+
 ## 1.1.14
 
 - Remove obsolete top-left helper and CWD display.

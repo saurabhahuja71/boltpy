@@ -11,7 +11,7 @@ from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.message import Message
 from textual.theme import Theme
 from textual.widget import Widget
-from textual.widgets import Button, Footer, Header, Label, Markdown, OptionList, Static, TextArea
+from textual.widgets import Button, Footer, Label, Markdown, OptionList, Static, TextArea
 from textual.widgets.option_list import Option
 from boltpy.agent.core import Agent
 from boltpy.agent.permissions import PermissionDecision, PermissionManager, PermissionMode, PermissionRequest
@@ -57,9 +57,9 @@ _HELP_TEXT = (
     "/quit  exit\n"
     "/exit  exit\n\n"
     "[bold]Keys[/bold]\n"
-    "Enter send · Cancel operation Alt+C · Quit Alt+Q · Show commands Alt+R · Change permission mode Alt+Y · Toggle todos Alt+U · Toggle interactive cursor Alt+I · Choose theme Alt+P\n"
+    "Enter send · Cancel operation Ctrl+C · Clear Ctrl+L · Commands Ctrl+G · Theme Ctrl+P · F3 mode · F4 todos · F5 mouse\n"
     "Permission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\n"
-    "Type while a task is running to queue it; Alt+C cancels the current task."
+    "Type while a task is running to queue it; Ctrl+C cancels the current task."
 )
 
 
@@ -142,44 +142,15 @@ class PromptTextArea(TextArea):
         def __init__(self, textarea: "PromptTextArea") -> None:
             super().__init__(); self.text = textarea.text
     async def _on_key(self, event: events.Key) -> None:
-        # Handle app shortcuts in the focused prompt as well as global bindings.
-        # Terminals can deliver the Windows/Super key as a widget key (or use the
-        # meta spelling), bypassing App.BINDINGS.
         shortcut_actions = {
-            "alt+r": "show_commands", "meta+r": "show_commands",
-            "alt+y": "toggle_mode", "meta+y": "toggle_mode",
-            "alt+u": "toggle_todo", "meta+u": "toggle_todo",
-            "alt+i": "toggle_mouse", "meta+i": "toggle_mouse",
-            "alt+p": "select_theme", "meta+p": "select_theme",
-            "alt+q": "quit", "meta+q": "quit",
-            "alt+c": "cancel_operation", "meta+c": "cancel_operation",
+            "ctrl+c": "cancel_operation", "ctrl+l": "clear_conversation",
+            "ctrl+g": "show_commands", "ctrl+p": "select_theme",
         }
-        # MATE Terminal emits Alt+letter as ESC followed by the letter
-        # (for example ^[m), rather than a named alt+m key event.
-        if event.key == "escape":
-            self._alt_prefix = True
-            event.stop(); event.prevent_default(); return
-        if getattr(self, "_alt_prefix", False):
-            self._alt_prefix = False
-            action = {"r": "show_commands", "y": "toggle_mode", "u": "toggle_todo", "i": "toggle_mouse", "p": "select_theme", "q": "quit", "c": "cancel_operation"}.get(event.key.lower())
-            if action is not None:
-                event.stop(); event.prevent_default()
-                if action == "show_commands" and not self.text:
-                    self.post_message(self.CommandsRequested())
-                elif action == "quit":
-                    self.app.exit()
-                else:
-                    getattr(self.app, f"action_{action}")()
-                return
         action = shortcut_actions.get(event.key)
-        if action is None and getattr(event, "character", None):
-            action = shortcut_actions.get(f"alt+{event.character.lower()}")
         if action is not None:
             event.stop(); event.prevent_default()
             if action == "show_commands" and not self.text:
                 self.post_message(self.CommandsRequested())
-            elif action == "quit":
-                self.app.exit()
             else:
                 getattr(self.app, f"action_{action}")()
             return
@@ -382,13 +353,14 @@ class BoltApp(App[None]):
     CSS_PATH = "styles.tcss"
     TITLE = "Bolt"
     BINDINGS = [
-        ("alt+c", "cancel_operation", "Cancel operation"),
-        ("alt+q", "quit", "Quit"),
-        ("alt+r", "show_commands", "Show commands"),
-        ("alt+y", "toggle_mode", "Change permission mode"),
-        ("alt+u", "toggle_todo", "Toggle todos"),
-        ("alt+i", "toggle_mouse", "Toggle interactive cursor"),
-        ("alt+p", "select_theme", "Choose theme"),
+        ("ctrl+c", "cancel_operation", "Cancel operation"),
+        ("ctrl+q", "quit", "Quit"),
+        ("ctrl+g", "show_commands", "Show commands"),
+        ("ctrl+m", "toggle_mode", "Change permission mode"),
+        ("ctrl+o", "show_permissions", "Show permissions"),
+        ("ctrl+t", "toggle_todo", "Toggle todos"),
+        ("ctrl+i", "toggle_mouse", "Toggle interactive cursor"),
+        ("ctrl+p", "select_theme", "Choose theme"),
         ("f3", "toggle_mode", "Change permission mode"),
         ("f4", "toggle_todo", "Toggle todos"),
         ("f5", "toggle_mouse", "Toggle mouse mode"),
@@ -418,7 +390,6 @@ class BoltApp(App[None]):
         self.agent.options_handler = self._request_options
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
         with Container(id="main"):
             with Horizontal(id="content"):
                 yield ConversationLog(id="transcript")
@@ -510,6 +481,16 @@ class BoltApp(App[None]):
             self._set_status("Cancelling…")
             self._active_worker.cancel()
 
+    def action_clear_conversation(self) -> None:
+        """Clear the visible transcript while retaining model history."""
+        transcript = self.query_one("#transcript", ConversationLog)
+        self.run_worker(self._clear_conversation(transcript), exclusive=False)
+
+    async def _clear_conversation(self, transcript: ConversationLog) -> None:
+        await transcript.remove_children()
+        self._write("[dim]Conversation display cleared. Model history is preserved.[/dim]", markup=True)
+        self._set_status("Ready")
+
     def action_show_commands(self) -> None:
         """Show the complete command and keyboard reference."""
         self._write(_HELP_TEXT, markup=True)
@@ -517,6 +498,12 @@ class BoltApp(App[None]):
 
     def on_prompt_text_area_commands_requested(self, event: PromptTextArea.CommandsRequested) -> None:
         self.action_show_commands()
+
+    def action_show_permissions(self) -> None:
+        """Show the permanent permission entries."""
+        entries = self.permissions.permanent_entries()
+        self._write("[bold]Permanent permissions[/bold]\n" + ("\n".join(f"✓ {section}: {scope}" for section, scope in entries) if entries else "(none)"), markup=True)
+        self._set_status("Ready")
 
     def action_select_theme(self) -> None:
         """Open the terminal-safe theme selector."""
@@ -664,9 +651,7 @@ class BoltApp(App[None]):
             models = await self._available_models()
             self._write("Available models:\n" + "\n".join(models) if models else "No models reported by the provider.")
         elif prompt == "/clear":
-            transcript = self.query_one("#transcript", ConversationLog)
-            await transcript.remove_children()
-            self._write("[dim]Conversation display cleared. Model history is preserved.[/dim]", markup=True)
+            self.action_clear_conversation()
         elif prompt == "/todo":
             self.action_toggle_todo()
         elif prompt == "/queue":

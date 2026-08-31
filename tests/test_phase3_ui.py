@@ -64,6 +64,16 @@ async def test_slash_input_shows_command_suggestions():
 
 
 @pytest.mark.asyncio
+async def test_normal_command_characters_are_not_treated_as_shortcuts():
+    app = BoltpyApp(Settings(api_key="test"))
+    async with app.run_test() as pilot:
+        prompt = app.query_one("#prompt")
+        prompt.text = "/c"
+        await pilot.pause()
+        assert prompt.text == "/c"
+
+
+@pytest.mark.asyncio
 async def test_help_documents_phase3_commands_and_controls():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test():
@@ -75,20 +85,20 @@ async def test_help_documents_phase3_commands_and_controls():
 async def test_alt_r_shows_all_commands_without_vscode_palette_conflict():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
-        await pilot.press("alt+r")
+        await pilot.press("ctrl+g")
         await pilot.pause()
-        assert ("alt+r", "show_commands", "Show commands") in app.BINDINGS
+        assert ("ctrl+g", "show_commands", "Show commands") in app.BINDINGS
         rendered = str(app.query_one(ConversationLog).children[-1].render())
         assert "/permissions remove <command>" in rendered
-        assert "Show commands Alt+R" in rendered
-        assert "Change permission mode Alt+Y" in rendered
+        assert "Commands Ctrl+G" in rendered
+        assert "Theme Ctrl+P" in rendered
 
 @pytest.mark.asyncio
 async def test_cancel_shortcut_is_first_in_compact_footer():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test():
         footer = app.query_one(Footer)
-        assert app.BINDINGS[0] == ("alt+c", "cancel_operation", "Cancel operation")
+        assert app.BINDINGS[0] == ("ctrl+c", "cancel_operation", "Cancel operation")
         assert footer.compact
         assert not footer.show_command_palette
 
@@ -97,21 +107,21 @@ async def test_alt_y_cycles_permission_modes():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
         assert app.permissions.mode.value == "ask"
-        await pilot.press("alt+y")
+        await pilot.press("ctrl+m")
         assert app.permissions.mode.value == "allow"
-        await pilot.press("alt+y")
+        await pilot.press("ctrl+m")
         assert app.permissions.mode.value == "plan"
-        await pilot.press("alt+y")
+        await pilot.press("ctrl+m")
         assert app.permissions.mode.value == "ask"
-        assert ("alt+y", "toggle_mode", "Change permission mode") in app.BINDINGS
-        assert ("alt+u", "toggle_todo", "Toggle todos") in app.BINDINGS
-        assert ("alt+i", "toggle_mouse", "Toggle interactive cursor") in app.BINDINGS
+        assert ("ctrl+m", "toggle_mode", "Change permission mode") in app.BINDINGS
+        assert ("ctrl+t", "toggle_todo", "Toggle todos") in app.BINDINGS
+        assert ("ctrl+i", "toggle_mouse", "Toggle interactive cursor") in app.BINDINGS
 
 @pytest.mark.asyncio
 async def test_alt_r_shows_commands_when_prompt_is_empty():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
-        await pilot.press("alt+r")
+        await pilot.press("ctrl+g")
         await pilot.pause()
         assert "/help  show commands and controls" in str(app.query_one(ConversationLog).children[-1].render())
 
