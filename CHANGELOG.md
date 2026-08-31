@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.20
+
+- Keep the Ctrl+Y permission-mode shortcut visible in the footer.
+- Prevent Textual's hidden text-editing redo binding from shadowing it.
+
+
 ## 1.1.19
 
 - Include `/remap` in slash-command suggestions.

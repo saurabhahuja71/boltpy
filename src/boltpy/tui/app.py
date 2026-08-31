@@ -428,7 +428,16 @@ class BoltApp(App[None]):
             self._set_mouse_mode(self.settings.mouse_mode)
             self._write("[bold cyan]Bolt[/bold cyan] — ready. Type /help for commands.", markup=True)
         self.query_one(TodoPanel).refresh_todos()
-        self.query_one("#prompt", PromptTextArea).focus(); self._set_status("Ready")
+        prompt = self.query_one("#prompt", PromptTextArea)
+        # Textual's TextArea installs a hidden Ctrl+Y=redo binding. It wins
+        # over the app binding in active_bindings and hides Bolt's mode key
+        # from the footer, even though PromptTextArea handles the key itself.
+        prompt._bindings.key_to_bindings["ctrl+y"] = [
+            binding for binding in prompt._bindings.key_to_bindings.get("ctrl+y", ())
+            if binding.action != "redo"
+        ]
+        self.refresh_bindings(); self.screen.refresh_bindings()
+        prompt.focus(); self._set_status("Ready")
 
     def _write(self, content: object, markup: bool = False) -> None:
         if isinstance(content, Widget):

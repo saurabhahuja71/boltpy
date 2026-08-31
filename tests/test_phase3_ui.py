@@ -116,6 +116,8 @@ async def test_alt_y_cycles_permission_modes():
         assert ("ctrl+y", "toggle_mode", "Change permission mode") in app.BINDINGS
         assert ("ctrl+t", "toggle_todo", "Toggle todos") in app.BINDINGS
         assert ("ctrl+l", "toggle_mouse", "Toggle mouse mode") in app.BINDINGS
+        footer = app.query_one(Footer)
+        assert any(widget.key == "ctrl+y" and widget.description == "Change permission mode" for widget in footer.query("*"))
 
 @pytest.mark.asyncio
 async def test_remap_is_suggested_and_lists_ctrl_y():
