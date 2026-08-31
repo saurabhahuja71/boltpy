@@ -4,7 +4,6 @@ import asyncio
 import importlib.metadata
 from pathlib import Path
 import subprocess
-import urllib.request
 import typer
 from boltpy.agent.core import Agent
 from boltpy.config import load_settings
@@ -79,15 +78,28 @@ def exec_command(prompt: str = typer.Argument(...), debug: bool = typer.Option(F
 def upgrade() -> None:
     """Upgrade Bolt to the latest version from GitHub."""
     installer_url = "https://raw.githubusercontent.com/saurabhahuja71/boltpy/main/install.sh"
+    typer.echo("Bolt upgrade: downloading latest installer...", err=True)
+    download = None
     try:
-        with urllib.request.urlopen(installer_url, timeout=30) as response:
-            installer = response.read()
-        result = subprocess.run(["bash"], input=installer, check=False)
+        download = subprocess.Popen(
+            ["curl", "--fail", "--location", "--progress-bar", installer_url],
+            stdout=subprocess.PIPE,
+        )
+        assert download.stdout is not None
+        typer.echo("Bolt upgrade: running installer (live progress follows)...", err=True)
+        result = subprocess.run(["bash"], stdin=download.stdout, check=False)
+        download.stdout.close()
+        download_status = download.wait()
     except Exception as error:
+        if download is not None and download.poll() is None:
+            download.kill()
         typer.echo(f"bolt: upgrade failed: {error}", err=True)
         raise typer.Exit(code=1) from error
     if result.returncode != 0:
         raise typer.Exit(code=result.returncode)
+    if download_status != 0:
+        typer.echo(f"bolt: installer download failed (exit {download_status})", err=True)
+        raise typer.Exit(code=download_status)
 
 
 @app.command()

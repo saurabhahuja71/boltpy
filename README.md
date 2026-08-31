@@ -79,7 +79,7 @@ Install for the current user with:
 curl -fsSL https://raw.githubusercontent.com/saurabhahuja71/boltpy/main/install.sh | bash
 ```
 
-The installer searches for Python 3.12 or newer (including versioned commands such as `python3.12`), then creates an isolated environment under `~/.local/share/bolt` and places the command in `~/.local/bin`. If [uv](https://docs.astral.sh/uv/) is installed, it can download a compatible Python automatically without sudo. Set `PYTHON=/path/to/python` to choose a specific interpreter.
+The installer prints progress for Python detection, source download, environment creation, and dependency installation. It searches for Python 3.12 or newer (including versioned commands such as `python3.12`), then creates an isolated environment under `~/.local/share/bolt` and places the command in `~/.local/bin`. If [uv](https://docs.astral.sh/uv/) is installed, it can download a compatible Python automatically without sudo. Set `PYTHON=/path/to/python` to choose a specific interpreter.
 
 ## Usage
 
@@ -90,7 +90,7 @@ bolt --model qwen3-coder
 bolt --provider ollama --endpoint http://localhost:11434
 bolt doctor
 
-For development, use pip install -e . or uv run bolt. To upgrade an existing installation in place, run `bolt upgrade`; it uses the same user-local installer as the curl command.
+For development, use pip install -e . or uv run bolt. To upgrade an existing installation in place, run `bolt upgrade`; it streams download and installation progress and uses the same user-local installer as the curl command.
 
 Set `OPENAI_API_KEY` for OpenAI or point `OPENAI_BASE_URL` at an OpenAI-compatible service. Bolt reads configuration in this order: defaults, `~/.config/boltpy/config.toml`, local `bolt.toml`, then environment variables.
 

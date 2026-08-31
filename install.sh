@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
+
+BOLT_STEP="starting"
+trap 'status=$?; echo "[Bolt] ERROR during: $BOLT_STEP (exit $status)" >&2' ERR
 
 REPO_URL="${BOLT_REPO_URL:-https://github.com/saurabhahuja71/boltpy.git}"
 INSTALL_ROOT="${BOLT_INSTALL_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/bolt}"
@@ -51,21 +54,36 @@ EOF
   return 1
 }
 
+BOLT_STEP="detecting Python 3.12+"
 PYTHON="$(find_python)"
+echo "[Bolt] Using Python: $PYTHON"
 
+BOLT_STEP="creating install directories"
+echo "[Bolt] Preparing install directory: $INSTALL_ROOT"
 mkdir -p "$INSTALL_ROOT" "$BIN_DIR"
 if [ -d "$INSTALL_ROOT/.git" ]; then
-  git -C "$INSTALL_ROOT" fetch --quiet --depth 1 origin main
-  git -C "$INSTALL_ROOT" reset --quiet --hard FETCH_HEAD
+  BOLT_STEP="downloading latest Bolt source"
+  echo "[Bolt] Updating source (Git may take a few minutes behind a proxy)..."
+  git -C "$INSTALL_ROOT" fetch --depth 1 origin main
+  git -C "$INSTALL_ROOT" reset --hard FETCH_HEAD
 else
+  BOLT_STEP="downloading Bolt source"
+  echo "[Bolt] Downloading source (Git may take a few minutes behind a proxy)..."
   rm -rf "$INSTALL_ROOT"
-  git clone --quiet --depth 1 "$REPO_URL" "$INSTALL_ROOT"
+  git clone --progress --depth 1 "$REPO_URL" "$INSTALL_ROOT"
 fi
+BOLT_STEP="creating isolated Python environment"
+echo "[Bolt] Creating isolated Python environment..."
 "$PYTHON" -m venv "$INSTALL_ROOT/.venv"
-"$INSTALL_ROOT/.venv/bin/python" -m pip install --quiet --upgrade pip
-"$INSTALL_ROOT/.venv/bin/python" -m pip install --quiet "$INSTALL_ROOT"
+BOLT_STEP="upgrading pip"
+echo "[Bolt] Upgrading pip..."
+PIP_PROGRESS_BAR=on "$INSTALL_ROOT/.venv/bin/python" -m pip install --upgrade pip
+BOLT_STEP="installing Bolt dependencies"
+echo "[Bolt] Installing Bolt and dependencies (package downloads will be shown)..."
+PIP_PROGRESS_BAR=on "$INSTALL_ROOT/.venv/bin/python" -m pip install "$INSTALL_ROOT"
+BOLT_STEP="linking bolt executable"
 ln -sfn "$INSTALL_ROOT/.venv/bin/bolt" "$BIN_DIR/bolt"
-echo "Bolt installed at $BIN_DIR/bolt"
+echo "[Bolt] Installed at $BIN_DIR/bolt"
 "$BIN_DIR/bolt" --version
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;

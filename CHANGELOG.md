@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2
+
+- Made `bolt upgrade` stream download and installer progress live.
+- Made the curl installer show each installation phase and detailed failure location.
+
+
 ## 1.1.1
 
 - Added a dark/black default theme and interactive `/theme` selector.
