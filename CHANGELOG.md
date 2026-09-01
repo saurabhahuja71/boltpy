@@ -1,4 +1,8 @@
 # Changelog
+## 1.2.7
+
+- Shorten the TUI mouse-mode status label so the complete status panel fits in narrow terminals.
+
 
 ## 1.2.2
 

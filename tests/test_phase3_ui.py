@@ -29,7 +29,7 @@ async def test_theme_command_switches_screen_immediately():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test():
         assert app.mouse_mode == "select"
-        assert "terminal scrollbar/text selection" in str(app.query_one("#status").render())
+        assert "Mouse Mode: SELECT" in str(app.query_one("#status").render())
         assert app.theme_name == "dark"
         assert app.settings.theme == "dark"
         await app._submit_prompt("/theme light")
@@ -164,9 +164,9 @@ async def test_mouse_select_mode_releases_terminal_reporting_and_restores_it(mon
         assert app.mouse_mode == "select"
         await app._submit_prompt("/mouse interactive")
         assert app.mouse_mode == "interactive"
-        assert "Bolt scrolling/widgets; Ctrl+L: terminal select" in str(app.query_one("#status").render())
+        assert "Mouse Mode: INTERACTIVE" in str(app.query_one("#status").render())
         await app._submit_prompt("/mouse select")
-        assert "terminal scrollbar/text selection; Ctrl+L: interactive" in str(app.query_one("#status").render())
+        assert "Mouse Mode: SELECT" in str(app.query_one("#status").render())
         assert probe.calls == ["disable", "enable", "disable"]
 
 

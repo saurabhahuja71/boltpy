@@ -523,13 +523,7 @@ class BoltApp(App[None]):
         labels = {"ready": "Ready", "processing": "Processing", "waiting": "Waiting", "error": "Error"}
         styles = {"ready": "", "processing": "bold", "waiting": "yellow", "error": "red"}
         vision = "ON" if self.effective_vision_state() is True else "OFF"
-        mouse = self.mouse_mode.upper()
-        mouse_help = (
-            "terminal scrollbar/text selection; Ctrl+L: interactive"
-            if mouse == "SELECT"
-            else "Bolt scrolling/widgets; Ctrl+L: terminal select"
-        )
-        status = Text(f"Bolt | Permission Mode: {self.permissions.mode.upper()} | Mouse Mode: {mouse} ({mouse_help}) | Vision: {vision} | Model: {provider}/{self.settings.model} | Tokens: {tokens} | ")
+        status = Text(f"Bolt | Permission Mode: {self.permissions.mode.upper()} | Mouse Mode: {self.mouse_mode.upper()} | Vision: {vision} | Model: {provider}/{self.settings.model} | Tokens: {tokens} | ")
         status.append(labels[self._status_state], style=styles[self._status_state])
         if text and text.casefold() not in {"ready", "processing", "waiting"}:
             status.append(f": {text}", style="dim" if self._status_state != "error" else "red")
