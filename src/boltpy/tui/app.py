@@ -712,10 +712,28 @@ class BoltApp(App[None]):
         future: asyncio.Future[PermissionDecision] = asyncio.get_running_loop().create_future()
         self._permission_future = future; prompt = self.query_one(PermissionPrompt); prompt.present(request)
         try: return await future
-        finally: prompt.dismiss(); self._permission_future = None
+        finally:
+            prompt.dismiss(); self._permission_future = None
+            self._restore_prompt_focus()
 
     def on_permission_prompt_decision(self, message: PermissionPrompt.Decision) -> None:
         if self._permission_future is not None and not self._permission_future.done(): self._permission_future.set_result(message.decision)
+
+    def _restore_prompt_focus(self) -> None:
+        """Return keyboard focus to the prompt after an inline interaction."""
+        prompt = self.query_one("#prompt", PromptTextArea)
+        prompt.display = True
+        prompt.focus()
+        self.set_focus(prompt)
+
+        def focus_prompt() -> None:
+            if self.query_one(PermissionPrompt).display or self.query_one(OptionsPrompt).display:
+                return
+            prompt.display = True
+            prompt.focus()
+            self.set_focus(prompt)
+
+        self.call_after_refresh(focus_prompt)
 
     async def _request_options(self, title: str, options: list[str], allow_custom: bool) -> str:
         """Show the options picker and await the user's choice."""
@@ -724,7 +742,9 @@ class BoltApp(App[None]):
         future: asyncio.Future[str] = asyncio.get_running_loop().create_future()
         self._options_future = future; prompt = self.query_one(OptionsPrompt); prompt.present(title, options, allow_custom)
         try: return await future
-        finally: prompt.dismiss(); self._options_future = None
+        finally:
+            prompt.dismiss(); self._options_future = None
+            self._restore_prompt_focus()
 
     def on_options_prompt_decision(self, message: OptionsPrompt.Decision) -> None:
         if self._options_future is not None and not self._options_future.done():

@@ -1,4 +1,8 @@
 # Changelog
+## 1.2.8
+
+- Restore prompt visibility and focus immediately after permission and options interactions.
+
 ## 1.2.7
 
 - Shorten the TUI mouse-mode status label so the complete status panel fits in narrow terminals.

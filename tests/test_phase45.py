@@ -237,6 +237,8 @@ async def test_options_picker_selects_numbered_option_and_custom_answer():
         await pilot.press("2")
         await pilot.pause()
         assert task.done() and task.result() == "Beta"
+        await pilot.pause()
+        assert app.query_one("#prompt").has_focus
 
 @pytest.mark.asyncio
 async def test_options_picker_custom_typed_answer():
@@ -252,6 +254,8 @@ async def test_options_picker_custom_typed_answer():
         await pilot.press("enter")
         await pilot.pause()
         assert task.done() and task.result() == "cust"
+        await pilot.pause()
+        assert app.query_one("#prompt").has_focus
 
 @pytest.mark.asyncio
 async def test_todo_panel_renders_open_and_completed_items():
