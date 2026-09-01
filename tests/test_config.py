@@ -1,3 +1,4 @@
+from pathlib import Path
 from boltpy.config import Settings, load_settings
 def test_environment_overrides_defaults(monkeypatch):
     monkeypatch.setenv("OPENAI_MODEL", "local-model")
@@ -9,3 +10,9 @@ def test_environment_overrides_defaults(monkeypatch):
     assert settings.api_key == "local"
 def test_settings_defaults():
     assert Settings().model == "gpt-4o-mini"
+
+
+def test_openai_dependency_stays_on_tested_major():
+    import tomllib
+    project = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
+    assert "openai>=1.50,<3" in project["project"]["dependencies"]

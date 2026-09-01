@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.2
+
+- Constrain OpenAI dependencies to the tested 2.x streaming stack.
+
 ## 1.2.1
 
 - Add workspace-bounded multimodal image analysis for explicitly vision-enabled providers.
