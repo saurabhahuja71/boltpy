@@ -1,4 +1,8 @@
 # Changelog
+## 1.2.9
+
+- Simplify footer shortcut labels and map Permission to Ctrl+R, Mouse to Ctrl+L, and Vision to Ctrl+Y for easier scanning.
+
 ## 1.2.8
 
 - Restore prompt visibility and focus immediately after permission and options interactions.

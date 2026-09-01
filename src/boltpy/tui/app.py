@@ -64,7 +64,7 @@ _HELP_TEXT = (
     "/quit  exit\n"
     "/exit  exit\n\n"
     "[bold]Keys[/bold]\n"
-    "Enter send · Cancel operation Ctrl+C · Mode Ctrl+Y · Todos Ctrl+T · Mouse Ctrl+L · Commands Ctrl+O · Theme Ctrl+B · Vision Ctrl+R\n"
+    "Enter send · Cancel Ctrl+C · Permission Ctrl+R · Todos Ctrl+T · Mouse Ctrl+L · Commands Ctrl+O · Theme Ctrl+B · Vision Ctrl+Y\n"
     "Permission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\n"
     "Type while a task is running to queue it; Ctrl+C cancels the current task."
 )
@@ -150,9 +150,9 @@ class PromptTextArea(TextArea):
             super().__init__(); self.text = textarea.text
     async def _on_key(self, event: events.Key) -> None:
         shortcut_actions = {
-            "ctrl+c": "cancel_operation", "ctrl+y": "toggle_mode",
+            "ctrl+c": "cancel_operation", "ctrl+r": "toggle_mode",
             "ctrl+t": "toggle_todo", "ctrl+l": "toggle_mouse",
-            "ctrl+o": "show_commands", "ctrl+b": "select_theme", "ctrl+r": "toggle_vision",
+            "ctrl+o": "show_commands", "ctrl+b": "select_theme", "ctrl+y": "toggle_vision",
         }
         action = shortcut_actions.get(event.key)
         if action is not None:
@@ -361,13 +361,13 @@ class BoltApp(App[None]):
     CSS_PATH = "styles.tcss"
     TITLE = "Bolt"
     BINDINGS = [
-        ("ctrl+y", "toggle_mode", "Change permission mode"),
-        ("ctrl+l", "toggle_mouse", "Toggle mouse mode"),
-        ("ctrl+r", "toggle_vision", "Toggle vision"),
-        ("ctrl+t", "toggle_todo", "Toggle todos"),
-        ("ctrl+o", "show_commands", "Show commands"),
-        ("ctrl+b", "select_theme", "Choose theme"),
-        ("ctrl+c", "cancel_operation", "Cancel operation"),
+        ("ctrl+r", "toggle_mode", "Permission"),
+        ("ctrl+l", "toggle_mouse", "Mouse"),
+        ("ctrl+y", "toggle_vision", "Vision"),
+        ("ctrl+t", "toggle_todo", "Todos"),
+        ("ctrl+o", "show_commands", "Commands"),
+        ("ctrl+b", "select_theme", "Theme"),
+        ("ctrl+c", "cancel_operation", "Cancel"),
         ("ctrl+q", "quit", "Quit"),
     ]
 
@@ -399,12 +399,12 @@ class BoltApp(App[None]):
         self.agent.registry.output_handler = self._tool_output
         self.agent.options_handler = self._request_options
         self._default_shortcuts = {
-            "cancel": ("ctrl+c", "Cancel operation", "cancel_operation"),
-            "mode": ("ctrl+y", "Change permission mode", "toggle_mode"),
-            "todos": ("ctrl+t", "Toggle todos", "toggle_todo"),
-            "mouse": ("ctrl+l", "Toggle mouse mode", "toggle_mouse"),
-            "commands": ("ctrl+o", "Show commands", "show_commands"),
-            "theme": ("ctrl+b", "Choose theme", "select_theme"),
+            "cancel": ("ctrl+c", "Cancel", "cancel_operation"),
+            "mode": ("ctrl+r", "Permission", "toggle_mode"),
+            "todos": ("ctrl+t", "Todos", "toggle_todo"),
+            "mouse": ("ctrl+l", "Mouse", "toggle_mouse"),
+            "commands": ("ctrl+o", "Commands", "show_commands"),
+            "theme": ("ctrl+b", "Theme", "select_theme"),
         }
         self.shortcut_actions = {key: action for key, _label, action in self._default_shortcuts.values()}
 
@@ -611,9 +611,9 @@ class BoltApp(App[None]):
         for name, (key, _label, action) in self._default_shortcuts.items():
             self._bindings.key_to_bindings[key] = [binding for binding in self._bindings.key_to_bindings.get(key, []) if binding.action != action]
         self._default_shortcuts = {
-            "cancel": ("ctrl+c", "Cancel operation", "cancel_operation"), "mode": ("ctrl+y", "Change permission mode", "toggle_mode"),
-            "todos": ("ctrl+t", "Toggle todos", "toggle_todo"), "mouse": ("ctrl+l", "Toggle mouse mode", "toggle_mouse"),
-            "commands": ("ctrl+o", "Show commands", "show_commands"), "theme": ("ctrl+b", "Choose theme", "select_theme"),
+            "cancel": ("ctrl+c", "Cancel", "cancel_operation"), "mode": ("ctrl+r", "Permission", "toggle_mode"),
+            "todos": ("ctrl+t", "Todos", "toggle_todo"), "mouse": ("ctrl+l", "Mouse", "toggle_mouse"),
+            "commands": ("ctrl+o", "Commands", "show_commands"), "theme": ("ctrl+b", "Theme", "select_theme"),
         }
         self.shortcut_actions = {key: action for key, _label, action in self._default_shortcuts.values()}
         for key, label, action in self._default_shortcuts.values(): self.bind(key, action, description=label)

@@ -88,7 +88,7 @@ async def test_alt_r_shows_all_commands_without_vscode_palette_conflict():
     async with app.run_test() as pilot:
         await pilot.press("ctrl+o")
         await pilot.pause()
-        assert ("ctrl+o", "show_commands", "Show commands") in app.BINDINGS
+        assert ("ctrl+o", "show_commands", "Commands") in app.BINDINGS
         rendered = str(app.query_one(ConversationLog).children[-1].render())
         assert "/permissions remove <command>" in rendered
         assert "Commands Ctrl+O" in rendered
@@ -100,11 +100,11 @@ async def test_footer_starts_with_mode_mouse_and_vision_shortcuts():
     async with app.run_test():
         footer = app.query_one(Footer)
         assert app.BINDINGS[:3] == [
-            ("ctrl+y", "toggle_mode", "Change permission mode"),
-            ("ctrl+l", "toggle_mouse", "Toggle mouse mode"),
-            ("ctrl+r", "toggle_vision", "Toggle vision"),
+            ("ctrl+r", "toggle_mode", "Permission"),
+            ("ctrl+l", "toggle_mouse", "Mouse"),
+            ("ctrl+y", "toggle_vision", "Vision"),
         ]
-        assert app.BINDINGS[-2:] == [("ctrl+c", "cancel_operation", "Cancel operation"), ("ctrl+q", "quit", "Quit")]
+        assert app.BINDINGS[-2:] == [("ctrl+c", "cancel_operation", "Cancel"), ("ctrl+q", "quit", "Quit")]
         assert not footer.compact
         assert not footer.show_command_palette
 
@@ -113,17 +113,17 @@ async def test_alt_y_cycles_permission_modes():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test() as pilot:
         assert app.permissions.mode.value == "ask"
-        await pilot.press("ctrl+y")
+        await pilot.press("ctrl+r")
         assert app.permissions.mode.value == "allow"
-        await pilot.press("ctrl+y")
+        await pilot.press("ctrl+r")
         assert app.permissions.mode.value == "plan"
-        await pilot.press("ctrl+y")
+        await pilot.press("ctrl+r")
         assert app.permissions.mode.value == "ask"
-        assert ("ctrl+y", "toggle_mode", "Change permission mode") in app.BINDINGS
-        assert ("ctrl+t", "toggle_todo", "Toggle todos") in app.BINDINGS
-        assert ("ctrl+l", "toggle_mouse", "Toggle mouse mode") in app.BINDINGS
+        assert ("ctrl+r", "toggle_mode", "Permission") in app.BINDINGS
+        assert ("ctrl+t", "toggle_todo", "Todos") in app.BINDINGS
+        assert ("ctrl+l", "toggle_mouse", "Mouse") in app.BINDINGS
         footer = app.query_one(Footer)
-        assert any(widget.key == "ctrl+y" and widget.description == "Change permission mode" for widget in footer.query("*"))
+        assert any(widget.key == "ctrl+r" and widget.description == "Permission" for widget in footer.query("*"))
 
 @pytest.mark.asyncio
 async def test_remap_is_suggested_and_lists_ctrl_y():
@@ -138,7 +138,7 @@ async def test_remap_is_suggested_and_lists_ctrl_y():
         await pilot.press("enter")
         await pilot.pause()
         rendered = str(app.query_one(ConversationLog).children[-1].render())
-        assert "ctrl+y  Change permission mode" in rendered
+        assert "ctrl+r  Permission" in rendered
 
 @pytest.mark.asyncio
 async def test_alt_r_shows_commands_when_prompt_is_empty():
@@ -206,10 +206,10 @@ def test_elapsed_time_formatting():
     assert BoltpyApp._format_elapsed(134.9) == "Time: 2m 14s"
 
 
-def test_ctrl_v_remains_textual_paste_and_ctrl_r_is_vision_toggle():
+def test_ctrl_v_remains_textual_paste_and_ctrl_y_is_vision_toggle():
     assert any(binding.key == "ctrl+v" and binding.action == "paste" for binding in PromptTextArea.BINDINGS)
     assert not any(binding[0] == "ctrl+v" for binding in BoltpyApp.BINDINGS)
-    assert ("ctrl+r", "toggle_vision", "Toggle vision") in BoltpyApp.BINDINGS
+    assert ("ctrl+y", "toggle_vision", "Vision") in BoltpyApp.BINDINGS
 
 
 @pytest.mark.asyncio
@@ -226,7 +226,7 @@ async def test_effective_vision_state_precedence(tmp_path, configured, override,
 
 
 @pytest.mark.asyncio
-async def test_vision_commands_are_local_and_f8_toggles(tmp_path):
+async def test_vision_commands_are_local_and_ctrl_y_toggles(tmp_path):
     app = BoltpyApp(Settings(api_key="test", workspace=tmp_path, vision_enabled=None))
     async with app.run_test() as pilot:
         async def unexpected_provider_call(_prompt):
@@ -243,16 +243,16 @@ async def test_vision_commands_are_local_and_f8_toggles(tmp_path):
         await app._submit_prompt("/vision invalid now")
         assert "Usage: /vision [on|off|toggle]" in str(app.query_one(ConversationLog).children[-1].render())
         app._vision_override = None
-        await pilot.press("ctrl+r")
+        await pilot.press("ctrl+y")
         assert app.effective_vision_state() is True
 
 
 @pytest.mark.asyncio
-async def test_status_panel_shows_vision_off_by_default_and_on_after_f8(tmp_path):
+async def test_status_panel_shows_vision_off_by_default_and_on_after_ctrl_y(tmp_path):
     app = BoltpyApp(Settings(api_key="test", workspace=tmp_path, vision_enabled=None))
     async with app.run_test() as pilot:
         assert "Vision: OFF" in str(app.query_one("#status").render())
-        await pilot.press("ctrl+r")
+        await pilot.press("ctrl+y")
         assert "Vision: ON" in str(app.query_one("#status").render())
 
 
