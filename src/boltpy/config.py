@@ -20,7 +20,7 @@ class Settings(BaseModel):
     theme: str = "dark"
     workspace: Path = Field(default_factory=Path.cwd)
     first_launch: bool = False
-    mouse_mode: Literal["interactive", "select"] = "interactive"
+    mouse_mode: Literal["interactive", "select"] = "select"
 
     def available_models(self) -> list[str]:
         """Return configured models with the active model first."""

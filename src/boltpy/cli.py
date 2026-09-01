@@ -74,6 +74,48 @@ def exec_command(prompt: str = typer.Argument(...), debug: bool = typer.Option(F
     """Run a prompt headlessly with tools allowed."""
     _run_prompt(prompt, allow_tools=True, debug=debug, model=model, provider=provider)
 
+@app.command(name="eval")
+def eval_command(
+    task_id: str | None = typer.Option(None, "--task", help="Run one evaluation task by ID."),
+    list_tasks: bool = typer.Option(False, "--list", help="List built-in evaluation tasks."),
+    results: Path | None = typer.Option(None, "--results", help="Append JSONL results to this path."),
+    model: str | None = typer.Option(None, "--model"),
+    provider: str | None = typer.Option(None, "--provider"),
+    endpoint: str | None = typer.Option(None, "--endpoint"),
+) -> None:
+    """Run the isolated Bolt evaluation tasks with the configured provider."""
+    from boltpy.evaluation import default_tasks, run_suite, summarize
+    tasks = default_tasks()
+    if list_tasks:
+        for item in tasks:
+            typer.echo(f"{item.task_id}\t{item.category}\t{item.prompt}")
+        return
+    selected = [item for item in tasks if task_id is None or item.task_id == task_id]
+    if task_id is not None and not selected:
+        typer.echo(f"bolt: unknown evaluation task: {task_id}", err=True)
+        raise typer.Exit(code=2)
+    settings = load_settings()
+    updates = {key: value for key, value in {"model": model, "provider": provider, "base_url": endpoint}.items() if value is not None}
+    if updates:
+        settings = settings.model_copy(update=updates)
+    output_path = results or (Path.cwd() / ".bolt" / "evaluations" / "results.jsonl")
+
+    async def execute() -> list[object]:
+        return await run_suite(selected, settings, output_path)
+
+    try:
+        evaluated = asyncio.run(execute())
+    except Exception as error:
+        typer.echo(f"bolt eval: {error}", err=True)
+        raise typer.Exit(code=1) from error
+    summary = summarize(evaluated)
+    typer.echo(f"Tasks: {summary.total_tasks} | verified: {summary.verified} | partial: {summary.partially_verified} | not verified: {summary.not_verified} | blocked: {summary.blocked}")
+    typer.echo(f"Average iterations: {summary.average_tool_iterations:.1f} | duration: {summary.average_elapsed_seconds:.2f}s")
+    for name, metrics in summary.by_model.items():
+        typer.echo(f"{name}: {metrics['tasks']} tasks, {metrics['verified']} verified, {metrics['partially_verified']} partial, {metrics['blocked']} blocked, ground truth {metrics['ground_truth_passed']}")
+    typer.echo(f"Results: {output_path}")
+
+
 @app.command()
 def upgrade() -> None:
     """Upgrade Bolt to the latest version from GitHub."""

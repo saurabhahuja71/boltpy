@@ -142,7 +142,7 @@ Configure available model names with `models` or `BOLT_MODELS`, then use `/model
 
 ## Terminal UI
 
-The TUI has a single chat transcript on the left with a collapsible todo side panel on the right; streaming text renders into the transcript, with the status bar and input at the bottom. It provides streaming Textual Markdown with syntax-highlighted fenced code, tables, lists, links, a CSS-variable theme system with dark/black theme by default, a live todo side panel, a numbered options picker with a typed answer, inline permission controls, and a status bar formatted as `Bolt | Mode: ASK/ALLOW/PLAN | Mouse: INTERACTIVE/SELECT | Model: provider/model | Tokens: n`.
+The TUI has a single chat transcript on the left with a collapsible todo side panel on the right; streaming text renders into the transcript, with the status bar and input at the bottom. The persistent footer also shows the configured workspace directory and the total elapsed time of the most recently completed task (for example, `📁 ~/projects/my-project` and `⏱ Time: 12.4s`); task timing includes streaming, tools, and agent loops and uses a monotonic clock. It provides streaming Textual Markdown with syntax-highlighted fenced code, tables, lists, links, a CSS-variable theme system with dark/black theme by default, a live todo side panel, a numbered options picker with a typed answer, inline permission controls, and a status bar formatted as `Bolt | Mode: ASK/ALLOW/PLAN | Mouse: INTERACTIVE/SELECT | Model: provider/model | Tokens: n`.
 
 ### Chat commands
 
@@ -180,7 +180,7 @@ The full shortcut footer reflects live `/remap` changes. is shown at the bottom 
 
 Prompts sent while a task is running are queued and run in order when it finishes; the status bar shows the number waiting and `/queue` lists them.
 
-Text selection and clipboard behavior remain terminal-native. Interactive cursor mode is the default: mouse clicks and scrolling work on widgets such as permission/model buttons. Use `/mouse select` or `Ctrl+L` when you need native terminal selection — drag across conversation text and use the terminal’s copy/paste shortcuts, commonly Ctrl+C / Ctrl+V or Shift+Insert — then return with `/mouse interactive` or `Ctrl+L`.
+Text selection and clipboard behavior remain terminal-native. Native terminal selection is the default: drag across conversation text and use the terminal’s copy/paste shortcuts, commonly Ctrl+C / Ctrl+V or Shift+Insert. Use `/mouse interactive` or `Ctrl+L` when you need mouse clicks and scrolling on widgets such as permission/model buttons, then toggle back with `Ctrl+L`.
 
 ### Example prompts
 

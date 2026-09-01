@@ -4,6 +4,9 @@ Screen { background: $background; color: $text; }
 #content { height: 1fr; }
 #transcript { width: 1fr; height: 1fr; border: none; background: $surface; padding: 0 1; scrollbar-color: $text-disabled; }
 #status { height: 1; color: $text-muted; padding: 0 1; }
+#footer-meta { height: 1; width: 100%; padding: 0 1; color: $text-muted; }
+#workspace { width: 1fr; text-overflow: ellipsis; }
+#task-time { width: auto; text-align: right; }
 #prompt { height: 4; min-height: 3; max-height: 8; border: round $success; background: $panel; padding: 0 1; }
 
 #todo-panel { width: 30; height: auto; min-height: 3; max-height: 12; margin-left: 1; border: round $border; background: $surface; padding: 1 1; overflow-y: auto; }

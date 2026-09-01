@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from pathlib import Path
 from rich.text import Text
 from textual import events, work
@@ -367,7 +368,7 @@ class BoltApp(App[None]):
     ]
 
     def __init__(self, settings: Settings) -> None:
-        super().__init__(); self.settings = settings; self.settings.workspace = settings.workspace.resolve(); self.session_store = SessionStore(self.settings.workspace); self.busy = False; self.theme_name = "dark"; self.mouse_mode = "interactive"
+        super().__init__(); self.settings = settings; self.settings.workspace = settings.workspace.resolve(); self.session_store = SessionStore(self.settings.workspace); self.busy = False; self.theme_name = "dark"; self.mouse_mode = "select"
         self._prompt_queue: list[str] = []
         self._permission_future: asyncio.Future[PermissionDecision] | None = None
         self._options_future: asyncio.Future[str] | None = None
@@ -376,6 +377,9 @@ class BoltApp(App[None]):
         self._current_activity: ToolActivity | None = None
         self._status_state = "ready"
         self._status_detail = "Ready"
+        self._task_started_at: float | None = None
+        self._last_task_elapsed: float | None = None
+        self._queued_task_started_at: list[float] = []
         self.register_theme(Theme(
             "dark", primary="#58a6ff", secondary="#79c0ff", warning="#d29922", error="#f85149",
             success="#3fb950", accent="#58a6ff", foreground="#e6edf3", background="#101318",
@@ -385,7 +389,7 @@ class BoltApp(App[None]):
             success="#1a7f37", accent="#0969da", foreground="#24292f", background="#ffffff",
             surface="#f6f8fa", panel="#ffffff"))
         self.permissions = PermissionManager(mode=PermissionMode(settings.permission_mode), handler=self._request_permission)
-        self.agent = Agent(settings, permissions=self.permissions)
+        self.agent = Agent(settings, permissions=self.permissions, emit_lifecycle=True)
         self.agent.registry.output_handler = self._tool_output
         self.agent.options_handler = self._request_options
         self._default_shortcuts = {
@@ -407,6 +411,9 @@ class BoltApp(App[None]):
             yield ModelPrompt()
             yield OptionsPrompt()
             yield Static("", id="status")
+            with Horizontal(id="footer-meta"):
+                yield Static("", id="workspace")
+                yield Static("⏱ Ready", id="task-time")
             yield PromptTextArea(placeholder="Ask Bolt anything… (Enter to send, Shift+Enter for newline)", id="prompt")
             yield Static("", id="command-suggestions")
         # Keep the cancel action first and compact so it remains visible in
@@ -427,6 +434,11 @@ class BoltApp(App[None]):
         else:
             self._set_mouse_mode(self.settings.mouse_mode)
             self._write("[bold cyan]Bolt[/bold cyan] — ready. Type /help for commands.", markup=True)
+            restored = self.session_store.load()
+            if len(restored) > 1 and isinstance(restored[0], dict) and restored[0].get("role") == "system":
+                self.agent.messages = restored
+                self.agent.restore_task_state(self.session_store.load_task_state())
+                self._write("[dim]Restored the previous conversation.[/dim]", markup=True)
         self.query_one(TodoPanel).refresh_todos()
         prompt = self.query_one("#prompt", PromptTextArea)
         # Textual's TextArea installs a hidden Ctrl+Y=redo binding. It wins
@@ -437,7 +449,11 @@ class BoltApp(App[None]):
             if binding.action != "redo"
         ]
         self.refresh_bindings(); self.screen.refresh_bindings()
-        prompt.focus(); self._set_status("Ready")
+        prompt.focus()
+        self.set_focus(prompt)
+        self._set_status("Ready")
+        self._refresh_footer_meta()
+        self.set_interval(1, self._refresh_footer_meta)
 
     def _write(self, content: object, markup: bool = False) -> None:
         if isinstance(content, Widget):
@@ -478,6 +494,41 @@ class BoltApp(App[None]):
         if text and text.casefold() not in {"ready", "processing", "waiting"}:
             status.append(f": {text}", style="dim" if self._status_state != "error" else "red")
         self.query_one("#status", Static).update(status)
+
+    @staticmethod
+    def _format_elapsed(elapsed: float) -> str:
+        """Format a completed task duration for the persistent footer."""
+        if elapsed < 60:
+            return f"Time: {elapsed:.1f}s"
+        minutes, seconds = divmod(int(elapsed), 60)
+        return f"Time: {minutes}m {seconds:02d}s"
+
+    def _refresh_footer_meta(self) -> None:
+        """Refresh the configured workspace and last completed task duration."""
+        try:
+            workspace = self.settings.workspace
+            home = Path.home()
+            try:
+                workspace_text = "~/" + str(workspace.relative_to(home))
+            except ValueError:
+                workspace_text = str(workspace)
+            if workspace_text == "~/":
+                workspace_text = "~"
+            self.query_one("#workspace", Static).update("📁 " + workspace_text)
+            time_text = "⏱ Ready" if self._last_task_elapsed is None else "⏱ " + self._format_elapsed(self._last_task_elapsed)
+            self.query_one("#task-time", Static).update(time_text)
+        except Exception:
+            # Supplementary footer state must never affect task execution.
+            return
+
+    def _start_task_timer(self, started_at: float | None = None) -> None:
+        self._task_started_at = started_at if started_at is not None else time.perf_counter()
+
+    def _finish_task_timer(self) -> None:
+        if self._task_started_at is not None:
+            self._last_task_elapsed = max(0.0, time.perf_counter() - self._task_started_at)
+            self._task_started_at = None
+            self._refresh_footer_meta()
 
     def _set_mouse_mode(self, mode: str) -> None:
         """Toggle terminal mouse reporting for native selection or widget interaction."""
@@ -665,14 +716,24 @@ class BoltApp(App[None]):
 
     async def _submit_prompt(self, value: str) -> None:
         prompt = value.strip()
-        if not prompt: return
+        if not prompt:
+            return
         if self.busy:
             if prompt.startswith("/"):
                 return
             self._prompt_queue.append(prompt)
+            self._queued_task_started_at.append(time.perf_counter())
             self._write(f"[dim]Queued ({len(self._prompt_queue)} waiting): {prompt[:80]}{'…' if len(prompt) > 80 else ''}[/dim]", markup=True)
             self._set_status(f"Queued ({len(self._prompt_queue)} waiting)")
             return
+        self._start_task_timer()
+        try:
+            await self._handle_prompt(prompt)
+        finally:
+            if self._active_worker is None:
+                self._finish_task_timer()
+
+    async def _handle_prompt(self, prompt: str) -> None:
         self.query_one("#prompt", PromptTextArea).text = ""
         if prompt in {"/quit", "/exit"}: self.exit()
         elif prompt == "/new": self.agent.reset(); self._write("[dim]Started a new conversation.[/dim]", markup=True)
@@ -745,7 +806,7 @@ class BoltApp(App[None]):
             if mode not in {"ask", "allow", "plan"}: self._write("[bold red]Usage:[/bold red] /mode ask|allow|plan", markup=True)
             else: self.agent.set_permission_mode(PermissionMode(mode)); self._set_status("Ready")
         elif prompt == "/theme": self.action_select_theme()
-        elif prompt == "/mouse": self._write(f"Current mouse mode: {self.mouse_mode} (interactive is the default; use /mouse select for native selection)")
+        elif prompt == "/mouse": self._write(f"Current mouse mode: {self.mouse_mode} (select is the default; use /mouse interactive for widget interaction)")
         elif prompt.startswith("/mouse "):
             mouse_mode = prompt.partition(" ")[2].strip().lower()
             if mouse_mode not in {"select", "interactive"}:
@@ -763,6 +824,8 @@ class BoltApp(App[None]):
     async def _ask(self, prompt: str) -> None:
         transcript = self.query_one("#transcript", ConversationLog)
         self.busy = True
+        if self._task_started_at is None:
+            self._start_task_timer()
         try:
             while True:
                 try:
@@ -770,9 +833,13 @@ class BoltApp(App[None]):
                 except asyncio.CancelledError:
                     self._write("[yellow]Operation cancelled.[/yellow]", markup=True)
                     self._set_status("Cancelled — running next queued prompt…" if self._prompt_queue else "Cancelled — ready")
+                finally:
+                    self._finish_task_timer()
                 if not self._prompt_queue:
                     break
                 prompt = self._prompt_queue.pop(0)
+                started_at = self._queued_task_started_at.pop(0) if self._queued_task_started_at else None
+                self._start_task_timer(started_at)
                 self._set_status("Running next queued prompt…")
         except Exception as error:
             self._write(Static(Text(str(error), style="red"), classes="system-message")); self._set_status("Error — ready")
@@ -813,6 +880,12 @@ class BoltApp(App[None]):
                         self._current_activity = None
                     if event.name in _TODO_TOOLS:
                         self.query_one(TodoPanel).refresh_todos()
+                elif event.kind == "lifecycle":
+                    labels = {"planning": "Planning…", "executing": "Executing…", "observing": "Observing result…", "validating": "Validating…", "replanning": "Replanning after failure…", "blocked": "Blocked", "completed": "Completed"}
+                    self._set_status(labels.get(event.status, event.status))
+                elif event.kind == "task_result":
+                    self._write(f"[dim]{event.text}[/dim]", markup=True)
+                    self._set_status(event.status.replace("_", " ").capitalize())
             if not answer_parts:
                 streaming.remove()
             finished = True
@@ -825,7 +898,9 @@ class BoltApp(App[None]):
     async def on_unmount(self) -> None:
         messages = getattr(self.agent, "messages", None)
         if messages is not None:
-            try: self.session_store.save(messages)
+            try:
+                task_state = getattr(self.agent, "task_state", None)
+                self.session_store.save(messages, task_state.to_dict() if task_state is not None else None)
             except OSError: pass
         await self.agent.close()
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0
+
+- Add task elapsed time and configured workspace display to the TUI footer.
+- Start the typing console focused on launch, with native terminal selection as the default mouse mode.
+- Improve agent task lifecycle tracking, evaluation, and session state handling.
+
 ## 1.1.20
 
 - Keep the Ctrl+Y permission-mode shortcut visible in the footer.

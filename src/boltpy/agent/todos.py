@@ -2,7 +2,8 @@
 from __future__ import annotations
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from typing import Any
 
 @dataclass
 class Todo:
@@ -11,6 +12,39 @@ class Todo:
     description: str
     completed: bool = False
     created: float = field(default_factory=time.time)
+
+
+@dataclass
+class TaskState:
+    """Structured runtime state for the current user task."""
+    objective: str
+    success_criteria: list[str] = field(default_factory=list)
+    current_step: str = ""
+    completed_steps: list[str] = field(default_factory=list)
+    validation_status: str = "not_run"
+    failure: str = ""
+    validation_attempted: bool = False
+    validation_command: str = ""
+    validation_scope: str = "unknown"
+    required_validation_scope: str = "unknown"
+    verified_scope: str = "unknown"
+    completion_status: str = "in_progress"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "TaskState | None":
+        if not isinstance(value.get("objective"), str) or not value["objective"].strip():
+            return None
+        return cls(
+            objective=value["objective"],
+            success_criteria=[str(item) for item in value.get("success_criteria", []) if isinstance(value.get("success_criteria", []), list)],
+            current_step=str(value.get("current_step", "")),
+            completed_steps=[str(item) for item in value.get("completed_steps", []) if isinstance(value.get("completed_steps", []), list)],
+            validation_status=str(value.get("validation_status", "not_run")),
+            failure=str(value.get("failure", "")),
+        )
 
 class TodoStore:
     """In-memory todo list shared between the agent tools and the panel."""

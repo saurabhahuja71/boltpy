@@ -94,3 +94,98 @@ async def test_agent_uses_returned_todo_id():
     assert provider.seen_id and provider.seen_id.startswith("todo_") and provider.seen_id != "todo_1"
     assert todo_store.get(provider.seen_id).completed
     todo_store.clear()
+
+
+class RepeatingFailureProvider:
+    def __init__(self):
+        self.calls = 0
+
+    async def stream_response(self, messages, tools):
+        self.calls += 1
+        yield ProviderEvent("tool_call", call_id=f"call-{self.calls}", name="read_file", arguments='{"path":"missing.txt"}')
+
+    async def close(self):
+        pass
+
+
+@pytest.mark.asyncio
+async def test_repeated_identical_tool_failure_blocks_without_looping():
+    provider = RepeatingFailureProvider()
+    agent = Agent(Settings(), provider=provider, emit_lifecycle=True)
+    events = [event async for event in agent.stream_events("inspect the missing file")]
+    assert provider.calls == 2
+    assert any(event.kind == "lifecycle" and event.status == "blocked" for event in events)
+    assert agent.task_state is not None
+    assert agent.task_state.validation_status == "blocked"
+    assert agent.task_state.failure
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_events_are_opt_in_for_compatibility():
+    provider = FakeProvider()
+    agent = Agent(Settings(), provider=provider)
+    events = [event async for event in agent.stream_events("hi")]
+    assert all(event.kind != "lifecycle" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_task_state_records_successful_validation(tmp_path):
+    class ValidationProvider:
+        async def stream_response(self, messages, tools):
+            if sum(message.get("role") == "tool" for message in messages) == 0:
+                yield ProviderEvent("tool_call", call_id="check", name="run_command", arguments='{"command":"python -m compileall -q ."}')
+            else:
+                yield ProviderEvent("text", text="validated")
+
+        async def close(self):
+            pass
+
+    agent = Agent(Settings(workspace=tmp_path, permission_mode="allow"), provider=ValidationProvider())
+    [event async for event in agent.stream_events("validate the workspace")]
+    assert agent.task_state is not None
+    assert agent.task_state.validation_status == "passed"
+    assert "run_command completed" in agent.task_state.completed_steps
+
+
+@pytest.mark.asyncio
+async def test_targeted_validation_is_partial_for_broad_task():
+    class TargetedProvider:
+        async def stream_response(self, messages, tools):
+            if sum(message.get("role") == "tool" for message in messages) == 0:
+                yield ProviderEvent("tool_call", call_id="check", name="run_command", arguments='{"command":"pytest tests/test_login.py"}')
+            else:
+                yield ProviderEvent("text", text="The targeted test passed.")
+
+        async def close(self):
+            pass
+
+    from boltpy.agent.permissions import PermissionLevel
+    from boltpy.agent.tools import Tool, ToolRegistry, ToolResult
+    registry = ToolRegistry()
+    registry.register(Tool("run_command", "test", {"type": "object"}, lambda **kwargs: ToolResult(True, stdout="1 passed"), capability="shell.execute", permission_level=PermissionLevel.CONFIRM))
+    agent = Agent(Settings(permission_mode="allow"), provider=TargetedProvider(), registry=registry)
+    [event async for event in agent.stream_events("Fix all authentication tests.")]
+    assert agent.task_state is not None
+    assert agent.task_state.validation_scope == "targeted"
+    assert agent.task_state.required_validation_scope == "project/full"
+    assert agent.task_state.completion_status == "partially_verified"
+
+
+@pytest.mark.asyncio
+async def test_successful_non_validation_command_does_not_verify_task(tmp_path):
+    class CommandProvider:
+        async def stream_response(self, messages, tools):
+            if sum(message.get("role") == "tool" for message in messages) == 0:
+                yield ProviderEvent("tool_call", call_id="command", name="run_command", arguments='{"command":"printf changed"}')
+            else:
+                yield ProviderEvent("text", text="The change was applied.")
+
+        async def close(self):
+            pass
+
+    agent = Agent(Settings(workspace=tmp_path, permission_mode="allow"), provider=CommandProvider())
+    [event async for event in agent.stream_events("Fix the login implementation.")]
+    assert agent.task_state is not None
+    assert agent.task_state.validation_attempted is False
+    assert agent.task_state.validation_status == "not_applicable"
+    assert agent.task_state.completion_status == "completed"

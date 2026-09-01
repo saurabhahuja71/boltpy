@@ -28,7 +28,7 @@ def hello():
 async def test_theme_command_switches_screen_immediately():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test():
-        assert app.mouse_mode == "interactive"
+        assert app.mouse_mode == "select"
         assert app.theme_name == "dark"
         assert app.settings.theme == "dark"
         await app._submit_prompt("/theme light")
@@ -176,7 +176,22 @@ async def test_model_selector_changes_provider_model_and_supports_keyboard():
 
 
 @pytest.mark.asyncio
-async def test_current_working_directory_is_not_rendered():
+async def test_prompt_is_focused_on_launch():
+    app = BoltpyApp(Settings(api_key="test"))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.query_one("#prompt").has_focus
+
+
+@pytest.mark.asyncio
+async def test_footer_shows_workspace_and_ready_time():
+    from textual.widgets import Static
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test():
-        assert not app.query("#cwd")
+        assert "📁 " in str(app.query_one("#workspace", Static).render())
+        assert str(app.query_one("#task-time", Static).render()) == "⏱ Ready"
+
+
+def test_elapsed_time_formatting():
+    assert BoltpyApp._format_elapsed(12.4) == "Time: 12.4s"
+    assert BoltpyApp._format_elapsed(134.9) == "Time: 2m 14s"
