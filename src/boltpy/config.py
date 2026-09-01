@@ -21,6 +21,7 @@ class Settings(BaseModel):
     workspace: Path = Field(default_factory=Path.cwd)
     first_launch: bool = False
     mouse_mode: Literal["interactive", "select"] = "select"
+    vision_enabled: bool | None = None
 
     def available_models(self) -> list[str]:
         """Return configured models with the active model first."""
@@ -47,6 +48,7 @@ _ENV_FIELDS = {
     "BOLTPY_MODELS": "models",
     "BOLTPY_PERMISSION_MODE": "permission_mode",
     "BOLTPY_THEME": "theme",
+    "BOLTPY_VISION_ENABLED": "vision_enabled",
 }
 
 def load_settings() -> Settings:

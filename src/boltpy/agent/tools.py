@@ -9,6 +9,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from boltpy.agent.providers import Provider, ProviderCapabilityError
 import httpx
 from boltpy.agent.permissions import PermissionLevel, PermissionRequest
 from boltpy.agent.todos import todo_store
@@ -16,6 +18,8 @@ from boltpy.agent.todos import todo_store
 ToolFunction = Callable[..., Any]
 OutputHandler = Callable[[str, bool], Any]
 ToolValidator = Callable[[dict[str, Any]], None]
+_MAX_IMAGE_BYTES = 10 * 1024 * 1024
+_SUPPORTED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 
 @dataclass(frozen=True)
 class ToolResult:
@@ -313,11 +317,55 @@ def _present_options_placeholder(title: str, options: list[str], allow_custom: b
     """Fallback used when no interactive options handler is wired up."""
     return ToolResult(ok=False, error="present_options requires an interactive UI; not available here")
 
-def default_registry(root: str | os.PathLike[str] = ".") -> ToolRegistry:
+async def analyze_image(path: str, prompt: str, workspace: Any, provider: Provider, vision_enabled: bool | None) -> ToolResult:
+    """Analyze a bounded workspace image through the configured provider."""
+    try:
+        target = workspace.path(path)
+    except (PermissionError, ValueError) as error:
+        return ToolResult(False, error=(
+            f"Image path is outside the permitted workspace: {error}. "
+            "Place the image inside the workspace or start Bolt with an appropriate workspace."
+        ))
+    if not target.exists():
+        return ToolResult(False, error=f"Image file does not exist: {path}")
+    if not target.is_file():
+        return ToolResult(False, error=f"Image path is not a regular file: {path}")
+    if target.suffix.casefold() not in _SUPPORTED_IMAGE_SUFFIXES:
+        return ToolResult(False, error="Unsupported image type; supported formats are PNG, JPEG/JPG, and WEBP")
+    try:
+        size = target.stat().st_size
+    except OSError as error:
+        return ToolResult(False, error=f"Could not inspect image metadata: {error}")
+    if size > _MAX_IMAGE_BYTES:
+        return ToolResult(False, error=f"Image is too large ({size} bytes); maximum supported size is {_MAX_IMAGE_BYTES} bytes")
+    if vision_enabled is not True:
+        state = "unknown" if vision_enabled is None else "disabled"
+        return ToolResult(False, error=(
+            f"Image analysis is {state} for the current provider/model configuration. "
+            "The image was not inspected; set vision_enabled=true for an explicitly authorized attempt."
+        ))
+    try:
+        result = await provider.analyze_image(target, prompt)
+    except ProviderCapabilityError as error:
+        return ToolResult(False, error=f"Image analysis unavailable for the configured provider/model: {error}")
+    except Exception as error:
+        return ToolResult(False, error=f"Image analysis provider request failed: {error}")
+    return ToolResult(True, output=result)
+
+
+def default_registry(root: str | os.PathLike[str] = ".", provider: Provider | None = None, vision_enabled: bool | None = None) -> ToolRegistry:
     """Build the standard registry; callers may register more tools."""
     registry = ToolRegistry()
     from boltpy.agent.coding import Workspace, coding_registry
-    coding_registry(registry, Workspace(root))
+    workspace = Workspace(root)
+    coding_registry(registry, workspace)
+    if provider is not None:
+        registry.register(Tool(
+            "analyze_image",
+            "Analyze a supported workspace image with the configured vision-capable provider/model.",
+            {"type": "object", "properties": {"path": {"type": "string"}, "prompt": {"type": "string"}}, "required": ["path", "prompt"]},
+            lambda path, prompt: analyze_image(path, prompt, workspace, provider, vision_enabled),
+        ))
     shell_schema = {"type": "object", "properties": {"command": {"type": "string"}, "timeout": {"type": "number", "default": 30}}, "required": ["command"]}
     shell_validator = lambda args: (validate_shell_command(args.get("command", "")), _validate_timeout(float(args.get("timeout", 30))))
     workspace_root = Workspace(root).root

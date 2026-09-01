@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1
+
+- Add workspace-bounded multimodal image analysis for explicitly vision-enabled providers.
+
 ## 1.2.0
 
 - Add task elapsed time and configured workspace display to the TUI footer.

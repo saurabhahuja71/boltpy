@@ -102,7 +102,7 @@ class Agent:
         self.settings = settings
         self.provider = provider or build_provider(settings)
         self.messages: list[Message] = [{"role": "system", "content": settings.system_prompt}]
-        self.registry = registry or default_registry(settings.workspace)
+        self.registry = registry or default_registry(settings.workspace, self.provider, settings.vision_enabled)
         self.permissions = permissions or PermissionManager(mode=settings.permission_mode)
         self.options_handler: OptionsHandler | None = None
         self.max_tool_iterations = max_tool_iterations
