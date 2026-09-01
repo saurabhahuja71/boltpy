@@ -353,7 +353,8 @@ async def analyze_image(path: str, prompt: str, workspace: Any, provider: Provid
     return ToolResult(True, output=result)
 
 
-def default_registry(root: str | os.PathLike[str] = ".", provider: Provider | None = None, vision_enabled: bool | None = None) -> ToolRegistry:
+def default_registry(root: str | os.PathLike[str] = ".", provider: Provider | None = None, vision_enabled: bool | None = None,
+                     vision_state: Callable[[], bool | None] | None = None) -> ToolRegistry:
     """Build the standard registry; callers may register more tools."""
     registry = ToolRegistry()
     from boltpy.agent.coding import Workspace, coding_registry
@@ -364,7 +365,10 @@ def default_registry(root: str | os.PathLike[str] = ".", provider: Provider | No
             "analyze_image",
             "Analyze a supported workspace image with the configured vision-capable provider/model.",
             {"type": "object", "properties": {"path": {"type": "string"}, "prompt": {"type": "string"}}, "required": ["path", "prompt"]},
-            lambda path, prompt: analyze_image(path, prompt, workspace, provider, vision_enabled),
+            lambda path, prompt: analyze_image(
+                path, prompt, workspace, provider,
+                vision_state() if vision_state is not None else vision_enabled,
+            ),
         ))
     shell_schema = {"type": "object", "properties": {"command": {"type": "string"}, "timeout": {"type": "number", "default": 30}}, "required": ["command"]}
     shell_validator = lambda args: (validate_shell_command(args.get("command", "")), _validate_timeout(float(args.get("timeout", 30))))

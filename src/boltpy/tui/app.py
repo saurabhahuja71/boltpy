@@ -28,7 +28,7 @@ _TASK_ACTIONS = re.compile(r"\b(check|find|list|tell|show|run|stop|start|create|
 _COMMANDS = (
     "/help", "/mode", "/theme", "/model", "/models", "/todo", "/queue",
     "/permissions", "/mouse", "/new", "/status", "/providers", "/provider", "/context",
-    "/diff", "/init", "/compact", "/clear", "/remap", "/quit", "/exit",
+    "/diff", "/init", "/compact", "/clear", "/remap", "/vision", "/quit", "/exit",
 )
 
 _HELP_TEXT = (
@@ -56,12 +56,14 @@ _HELP_TEXT = (
     "/remap  list shortcut mappings\n"
     "/remap <action> <key>  remap a shortcut\n"
     "/remap reset  restore default shortcuts\n"
+    "/vision  show image-analysis attempt status\n"
+    "/vision on|off|toggle  change image-analysis attempts for this session\n"
     "/provider  show the active provider\n"
     "/provider <name>  switch provider\n"
     "/quit  exit\n"
     "/exit  exit\n\n"
     "[bold]Keys[/bold]\n"
-    "Enter send · Cancel operation Ctrl+C · Mode Ctrl+Y · Todos Ctrl+T · Mouse Ctrl+L · Commands Ctrl+O · Theme Ctrl+B\n"
+    "Enter send · Cancel operation Ctrl+C · Mode Ctrl+Y · Todos Ctrl+T · Mouse Ctrl+L · Commands Ctrl+O · Theme Ctrl+B · Vision F8\n"
     "Permission: ←/→ or Tab select · Enter/Space confirm · Esc deny\n\n"
     "Type while a task is running to queue it; Ctrl+C cancels the current task."
 )
@@ -149,7 +151,7 @@ class PromptTextArea(TextArea):
         shortcut_actions = {
             "ctrl+c": "cancel_operation", "ctrl+y": "toggle_mode",
             "ctrl+t": "toggle_todo", "ctrl+l": "toggle_mouse",
-            "ctrl+o": "show_commands", "ctrl+b": "select_theme",
+            "ctrl+o": "show_commands", "ctrl+b": "select_theme", "f8": "toggle_vision",
         }
         action = shortcut_actions.get(event.key)
         if action is not None:
@@ -365,10 +367,12 @@ class BoltApp(App[None]):
         ("ctrl+t", "toggle_todo", "Toggle todos"),
         ("ctrl+l", "toggle_mouse", "Toggle mouse mode"),
         ("ctrl+b", "select_theme", "Choose theme"),
+        ("f8", "toggle_vision", "Toggle vision"),
     ]
 
     def __init__(self, settings: Settings) -> None:
         super().__init__(); self.settings = settings; self.settings.workspace = settings.workspace.resolve(); self.session_store = SessionStore(self.settings.workspace); self.busy = False; self.theme_name = "dark"; self.mouse_mode = "select"
+        self._vision_override: bool | None = None
         self._prompt_queue: list[str] = []
         self._permission_future: asyncio.Future[PermissionDecision] | None = None
         self._options_future: asyncio.Future[str] | None = None
@@ -389,7 +393,8 @@ class BoltApp(App[None]):
             success="#1a7f37", accent="#0969da", foreground="#24292f", background="#ffffff",
             surface="#f6f8fa", panel="#ffffff"))
         self.permissions = PermissionManager(mode=PermissionMode(settings.permission_mode), handler=self._request_permission)
-        self.agent = Agent(settings, permissions=self.permissions, emit_lifecycle=True)
+        self.agent = Agent(settings, permissions=self.permissions, emit_lifecycle=True,
+                           vision_state=self.effective_vision_state)
         self.agent.registry.output_handler = self._tool_output
         self.agent.options_handler = self._request_options
         self._default_shortcuts = {
@@ -601,6 +606,35 @@ class BoltApp(App[None]):
         self._write("[dim]Conversation display cleared. Model history is preserved.[/dim]", markup=True)
         self._set_status("Ready")
 
+    def effective_vision_state(self) -> bool | None:
+        """Return the session-effective image-analysis attempt state."""
+        if self._vision_override is not None:
+            return self._vision_override
+        return self.settings.vision_enabled
+
+    def _vision_status(self) -> str:
+        state = self.effective_vision_state()
+        label = "ON" if state is True else "OFF" if state is False else "UNKNOWN"
+        source = "runtime override" if self._vision_override is not None else (
+            "configuration" if self.settings.vision_enabled is not None else "unknown"
+        )
+        if state is True:
+            detail = "image-analysis attempts enabled; model vision support is not guaranteed"
+        elif state is False:
+            detail = "image-analysis attempts disabled"
+        else:
+            detail = "image-analysis capability is not configured"
+        return f"Vision: {label} ({detail}; source: {source})"
+
+    def _set_vision_override(self, enabled: bool) -> None:
+        self._vision_override = enabled
+        self._write(f"Vision: {'ON' if enabled else 'OFF'}")
+        self._set_status(f"Vision: {'ON' if enabled else 'OFF'}")
+
+    def action_toggle_vision(self) -> None:
+        current = self.effective_vision_state()
+        self._set_vision_override(current is not True)
+
     def action_show_commands(self) -> None:
         """Show the complete command and keyboard reference."""
         self._write(_HELP_TEXT, markup=True)
@@ -736,6 +770,13 @@ class BoltApp(App[None]):
     async def _handle_prompt(self, prompt: str) -> None:
         self.query_one("#prompt", PromptTextArea).text = ""
         if prompt in {"/quit", "/exit"}: self.exit()
+        elif prompt == "/vision": self._write(self._vision_status())
+        elif prompt == "/vision on": self._set_vision_override(True)
+        elif prompt == "/vision off": self._set_vision_override(False)
+        elif prompt == "/vision toggle": self.action_toggle_vision()
+        elif prompt.startswith("/vision "):
+            self._write("Usage: /vision [on|off|toggle]")
+            self._set_status("Ready")
         elif prompt == "/new": self.agent.reset(); self._write("[dim]Started a new conversation.[/dim]", markup=True)
         elif prompt == "/context": self._write(project_context(self.settings.workspace))
         elif prompt == "/providers" or prompt == "/provider": self._write(f"Active provider: {self.settings.provider}")

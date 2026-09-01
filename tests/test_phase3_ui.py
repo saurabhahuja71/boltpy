@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from textual.widgets import Footer, Markdown
 from boltpy.config import Settings
-from boltpy.tui.app import BoltpyApp, ConversationLog, ModelPrompt, OptionsPrompt, PermissionPrompt, render_markdown
+from boltpy.tui.app import BoltpyApp, ConversationLog, ModelPrompt, OptionsPrompt, PermissionPrompt, PromptTextArea, render_markdown
 
 
 def test_markdown_renderer_returns_textual_markdown_for_common_content():
@@ -195,3 +195,44 @@ async def test_footer_shows_workspace_and_ready_time():
 def test_elapsed_time_formatting():
     assert BoltpyApp._format_elapsed(12.4) == "Time: 12.4s"
     assert BoltpyApp._format_elapsed(134.9) == "Time: 2m 14s"
+
+
+def test_ctrl_v_remains_textual_paste_and_f8_is_vision_toggle():
+    assert any(binding.key == "ctrl+v" and binding.action == "paste" for binding in PromptTextArea.BINDINGS)
+    assert not any(binding[0] == "ctrl+v" for binding in BoltpyApp.BINDINGS)
+    assert ("f8", "toggle_vision", "Toggle vision") in BoltpyApp.BINDINGS
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("configured", "override", "expected"), [
+    (True, None, True), (True, False, False),
+    (False, None, False), (False, True, True),
+    (None, None, None), (None, True, True),
+])
+async def test_effective_vision_state_precedence(tmp_path, configured, override, expected):
+    app = BoltpyApp(Settings(api_key="test", workspace=tmp_path, vision_enabled=configured))
+    async with app.run_test():
+        app._vision_override = override
+        assert app.effective_vision_state() is expected
+
+
+@pytest.mark.asyncio
+async def test_vision_commands_are_local_and_f8_toggles(tmp_path):
+    app = BoltpyApp(Settings(api_key="test", workspace=tmp_path, vision_enabled=None))
+    async with app.run_test() as pilot:
+        async def unexpected_provider_call(_prompt):
+            raise AssertionError("slash command reached provider")
+        app.agent.stream_events = unexpected_provider_call
+        await app._submit_prompt("/vision")
+        assert "Vision: UNKNOWN" in str(app.query_one(ConversationLog).children[-1].render())
+        await app._submit_prompt("/vision on")
+        assert app.effective_vision_state() is True
+        await app._submit_prompt("/vision off")
+        assert app.effective_vision_state() is False
+        await app._submit_prompt("/vision toggle")
+        assert app.effective_vision_state() is True
+        await app._submit_prompt("/vision invalid now")
+        assert "Usage: /vision [on|off|toggle]" in str(app.query_one(ConversationLog).children[-1].render())
+        app._vision_override = None
+        await pilot.press("f8")
+        assert app.effective_vision_state() is True

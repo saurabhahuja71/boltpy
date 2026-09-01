@@ -98,11 +98,14 @@ class Agent:
     """History-aware agent supporting multiple tool calls and iterations."""
     def __init__(self, settings: Settings, provider: Provider | None = None,
                  registry: ToolRegistry | None = None, permissions: PermissionManager | None = None,
-                 max_tool_iterations: int = 16, emit_lifecycle: bool = False) -> None:
+                 max_tool_iterations: int = 16, emit_lifecycle: bool = False,
+                 vision_state: Callable[[], bool | None] | None = None) -> None:
         self.settings = settings
         self.provider = provider or build_provider(settings)
         self.messages: list[Message] = [{"role": "system", "content": settings.system_prompt}]
-        self.registry = registry or default_registry(settings.workspace, self.provider, settings.vision_enabled)
+        self.registry = registry or default_registry(
+            settings.workspace, self.provider, settings.vision_enabled, vision_state,
+        )
         self.permissions = permissions or PermissionManager(mode=settings.permission_mode)
         self.options_handler: OptionsHandler | None = None
         self.max_tool_iterations = max_tool_iterations

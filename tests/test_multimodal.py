@@ -183,3 +183,18 @@ async def test_ollama_transport_uses_native_chat_image_format(tmp_path, monkeypa
     assert url == "http://ollama:11434/api/chat"
     assert payload["messages"][0]["content"] == "describe"
     assert payload["messages"][0]["images"] == [base64.b64encode(path.read_bytes()).decode("ascii")]
+
+
+@pytest.mark.asyncio
+async def test_registered_image_tool_reads_vision_state_dynamically(tmp_path):
+    image_path(tmp_path)
+    provider = VisionProvider()
+    state = {"enabled": False}
+    registry = default_registry(tmp_path, provider, vision_state=lambda: state["enabled"])
+    refused = await registry.execute("analyze_image", {"path": "screen.png", "prompt": "describe it"})
+    assert not refused.ok
+    assert not provider.calls
+    state["enabled"] = True
+    accepted = await registry.execute("analyze_image", {"path": "screen.png", "prompt": "describe it"})
+    assert accepted.ok
+    assert len(provider.calls) == 1
