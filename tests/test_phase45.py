@@ -221,8 +221,8 @@ async def test_status_bar_shows_provider_model_and_tokens():
         app.agent.provider.total_tokens = 42
         app._set_status("Ready")
         rendered = str(app.query_one("#status", Static).render())
-        assert "Mode: ASK" in rendered
-        assert "Mouse: SELECT" in rendered
+        assert "Permission Mode: ASK" in rendered
+        assert "Mouse Mode: SELECT" in rendered
         assert "Model: openrouter/deepseek-r1" in rendered
         assert "Tokens: 42" in rendered
 

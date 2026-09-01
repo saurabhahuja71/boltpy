@@ -94,11 +94,16 @@ async def test_alt_r_shows_all_commands_without_vscode_palette_conflict():
         assert "Theme Ctrl+B" in rendered
 
 @pytest.mark.asyncio
-async def test_cancel_shortcut_is_first_in_compact_footer():
+async def test_footer_starts_with_mode_mouse_and_vision_shortcuts():
     app = BoltpyApp(Settings(api_key="test"))
     async with app.run_test():
         footer = app.query_one(Footer)
-        assert app.BINDINGS[0] == ("ctrl+c", "cancel_operation", "Cancel operation")
+        assert app.BINDINGS[:3] == [
+            ("ctrl+y", "toggle_mode", "Change permission mode"),
+            ("ctrl+l", "toggle_mouse", "Toggle mouse mode"),
+            ("ctrl+r", "toggle_vision", "Toggle vision"),
+        ]
+        assert app.BINDINGS[-2:] == [("ctrl+c", "cancel_operation", "Cancel operation"), ("ctrl+q", "quit", "Quit")]
         assert not footer.compact
         assert not footer.show_command_palette
 
@@ -245,3 +250,55 @@ async def test_status_panel_shows_vision_off_by_default_and_on_after_f8(tmp_path
         assert "Vision: OFF" in str(app.query_one("#status").render())
         await pilot.press("ctrl+r")
         assert "Vision: ON" in str(app.query_one("#status").render())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("logical", [
+    "sudo dnf install code -y",
+    "def hello():\n    print(\"hello\")",
+    "enabled: true\nmodel: qwen3-coder",
+    '{"enabled": true}',
+    "first line\n\nthird line",
+    "a very long logical line that must remain one line without display wrapping",
+])
+async def test_copy_uses_exact_latest_logical_assistant_text(tmp_path, logical):
+    app = BoltpyApp(Settings(api_key="test", workspace=tmp_path))
+    copied = []
+    async with app.run_test():
+        app.agent.messages = [{"role": "system", "content": "system"}, {"role": "assistant", "content": logical}]
+        app.copy_to_clipboard = copied.append
+        await app._submit_prompt("/copy")
+        assert copied == [logical]
+        assert "Copied latest output to clipboard." in str(app.query_one(ConversationLog).children[-1].render())
+
+
+@pytest.mark.asyncio
+async def test_copy_prefers_latest_assistant_then_tool_logical_content(tmp_path):
+    app = BoltpyApp(Settings(api_key="test", workspace=tmp_path))
+    copied = []
+    async with app.run_test():
+        app.agent.messages = [
+            {"role": "assistant", "content": "older"},
+            {"role": "tool", "content": "3 passed"},
+        ]
+        app.copy_to_clipboard = copied.append
+        await app._submit_prompt("/copy")
+        assert copied == ["3 passed"]
+        app.agent.messages.append({"role": "assistant", "content": "new answer"})
+        await app._submit_prompt("/copy")
+        assert copied == ["3 passed", "new answer"]
+
+
+@pytest.mark.asyncio
+async def test_copy_without_output_and_clipboard_failure_are_reported(tmp_path):
+    app = BoltpyApp(Settings(api_key="test", workspace=tmp_path))
+    async with app.run_test():
+        await app._submit_prompt("/copy")
+        assert "Nothing to copy yet." in str(app.query_one(ConversationLog).children[-1].render())
+        app.agent.messages = [{"role": "assistant", "content": "output"}]
+        def fail(_text):
+            raise OSError("clipboard unavailable")
+        app.copy_to_clipboard = fail
+        await app._submit_prompt("/copy")
+        rendered = str(app.query_one(ConversationLog).children[-1].render())
+        assert "Could not copy output to clipboard: clipboard unavailable" in rendered

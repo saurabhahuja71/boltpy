@@ -28,7 +28,7 @@ _TASK_ACTIONS = re.compile(r"\b(check|find|list|tell|show|run|stop|start|create|
 _COMMANDS = (
     "/help", "/mode", "/theme", "/model", "/models", "/todo", "/queue",
     "/permissions", "/mouse", "/new", "/status", "/providers", "/provider", "/context",
-    "/diff", "/init", "/compact", "/clear", "/remap", "/vision", "/quit", "/exit",
+    "/diff", "/init", "/compact", "/clear", "/remap", "/vision", "/copy", "/quit", "/exit",
 )
 
 _HELP_TEXT = (
@@ -58,6 +58,7 @@ _HELP_TEXT = (
     "/remap reset  restore default shortcuts\n"
     "/vision  show image-analysis attempt status\n"
     "/vision on|off|toggle  change image-analysis attempts for this session\n"
+    "/copy  copy the latest logical assistant or tool output\n"
     "/provider  show the active provider\n"
     "/provider <name>  switch provider\n"
     "/quit  exit\n"
@@ -360,14 +361,14 @@ class BoltApp(App[None]):
     CSS_PATH = "styles.tcss"
     TITLE = "Bolt"
     BINDINGS = [
+        ("ctrl+y", "toggle_mode", "Change permission mode"),
+        ("ctrl+l", "toggle_mouse", "Toggle mouse mode"),
+        ("ctrl+r", "toggle_vision", "Toggle vision"),
+        ("ctrl+t", "toggle_todo", "Toggle todos"),
+        ("ctrl+o", "show_commands", "Show commands"),
+        ("ctrl+b", "select_theme", "Choose theme"),
         ("ctrl+c", "cancel_operation", "Cancel operation"),
         ("ctrl+q", "quit", "Quit"),
-        ("ctrl+o", "show_commands", "Show commands"),
-        ("ctrl+y", "toggle_mode", "Change permission mode"),
-        ("ctrl+t", "toggle_todo", "Toggle todos"),
-        ("ctrl+l", "toggle_mouse", "Toggle mouse mode"),
-        ("ctrl+b", "select_theme", "Choose theme"),
-        ("ctrl+r", "toggle_vision", "Toggle vision"),
     ]
 
     def __init__(self, settings: Settings) -> None:
@@ -415,14 +416,15 @@ class BoltApp(App[None]):
             yield PermissionPrompt()
             yield ModelPrompt()
             yield OptionsPrompt()
-            yield Static("", id="status")
-            with Horizontal(id="footer-meta"):
-                yield Static("", id="workspace")
-                yield Static("⏱ Ready", id="task-time")
             yield PromptTextArea(placeholder="Ask Bolt anything… (Enter to send, Shift+Enter for newline)", id="prompt")
             yield Static("", id="command-suggestions")
-        # Keep the cancel action first and compact so it remains visible in
-        # narrow terminals instead of scrolling off the footer.
+        with Horizontal(id="footer-meta"):
+            yield Static("", id="workspace")
+            yield Static("⏱ Ready", id="task-time")
+        with Horizontal(id="footer-status"):
+            yield Static("", id="status")
+        # Keep the footer compact so the primary mode, mouse, and vision
+        # controls remain visible before the remaining shortcuts.
         yield Footer(show_command_palette=False, compact=False)
 
     def on_mount(self) -> None:
@@ -460,6 +462,32 @@ class BoltApp(App[None]):
         self._refresh_footer_meta()
         self.set_interval(1, self._refresh_footer_meta)
 
+    def _latest_copyable_output(self) -> str | None:
+        """Return the newest non-empty logical assistant or tool message."""
+        for message in reversed(getattr(self.agent, "messages", [])):
+            if message.get("role") not in {"assistant", "tool"}:
+                continue
+            content = message.get("content")
+            if isinstance(content, str) and content:
+                return content
+        return None
+
+    def _copy_latest_output(self) -> None:
+        """Copy logical message content without using rendered terminal cells."""
+        content = self._latest_copyable_output()
+        if content is None:
+            self._write("Nothing to copy yet.")
+            self._set_status("Ready")
+            return
+        try:
+            self.copy_to_clipboard(content)
+        except Exception as error:
+            self._write(f"Could not copy output to clipboard: {error}")
+            self._set_status("Error — clipboard copy failed")
+            return
+        self._write("Copied latest output to clipboard.")
+        self._set_status("Ready")
+
     def _write(self, content: object, markup: bool = False) -> None:
         if isinstance(content, Widget):
             widget = content
@@ -495,7 +523,7 @@ class BoltApp(App[None]):
         labels = {"ready": "Ready", "processing": "Processing", "waiting": "Waiting", "error": "Error"}
         styles = {"ready": "", "processing": "bold", "waiting": "yellow", "error": "red"}
         vision = "ON" if self.effective_vision_state() is True else "OFF"
-        status = Text(f"Bolt | Mode: {self.permissions.mode.upper()} | Mouse: {self.mouse_mode.upper()} | Model: {provider}/{self.settings.model} | Vision: {vision} | Tokens: {tokens} | ")
+        status = Text(f"Bolt | Permission Mode: {self.permissions.mode.upper()} | Mouse Mode: {self.mouse_mode.upper()} | Vision: {vision} | Model: {provider}/{self.settings.model} | Tokens: {tokens} | ")
         status.append(labels[self._status_state], style=styles[self._status_state])
         if text and text.casefold() not in {"ready", "processing", "waiting"}:
             status.append(f": {text}", style="dim" if self._status_state != "error" else "red")
@@ -676,7 +704,7 @@ class BoltApp(App[None]):
         modes = (PermissionMode.ASK, PermissionMode.ALLOW, PermissionMode.PLAN)
         current = self.permissions.mode
         self.agent.set_permission_mode(modes[(modes.index(current) + 1) % len(modes)])
-        self._set_status(f"Mode: {self.permissions.mode.upper()}")
+        self._set_status(f"Permission Mode: {self.permissions.mode.upper()}")
 
     async def _request_permission(self, request: PermissionRequest) -> PermissionDecision:
         """Await an inline widget decision without blocking Textual's UI."""
@@ -772,6 +800,7 @@ class BoltApp(App[None]):
         self.query_one("#prompt", PromptTextArea).text = ""
         if prompt in {"/quit", "/exit"}: self.exit()
         elif prompt == "/vision": self._write(self._vision_status())
+        elif prompt == "/copy": self._copy_latest_output()
         elif prompt == "/vision on": self._set_vision_override(True)
         elif prompt == "/vision off": self._set_vision_override(False)
         elif prompt == "/vision toggle": self.action_toggle_vision()
