@@ -197,10 +197,10 @@ def test_elapsed_time_formatting():
     assert BoltpyApp._format_elapsed(134.9) == "Time: 2m 14s"
 
 
-def test_ctrl_v_remains_textual_paste_and_f8_is_vision_toggle():
+def test_ctrl_v_remains_textual_paste_and_ctrl_r_is_vision_toggle():
     assert any(binding.key == "ctrl+v" and binding.action == "paste" for binding in PromptTextArea.BINDINGS)
     assert not any(binding[0] == "ctrl+v" for binding in BoltpyApp.BINDINGS)
-    assert ("f8", "toggle_vision", "Toggle vision") in BoltpyApp.BINDINGS
+    assert ("ctrl+r", "toggle_vision", "Toggle vision") in BoltpyApp.BINDINGS
 
 
 @pytest.mark.asyncio
@@ -234,5 +234,14 @@ async def test_vision_commands_are_local_and_f8_toggles(tmp_path):
         await app._submit_prompt("/vision invalid now")
         assert "Usage: /vision [on|off|toggle]" in str(app.query_one(ConversationLog).children[-1].render())
         app._vision_override = None
-        await pilot.press("f8")
+        await pilot.press("ctrl+r")
         assert app.effective_vision_state() is True
+
+
+@pytest.mark.asyncio
+async def test_status_panel_shows_vision_off_by_default_and_on_after_f8(tmp_path):
+    app = BoltpyApp(Settings(api_key="test", workspace=tmp_path, vision_enabled=None))
+    async with app.run_test() as pilot:
+        assert "Vision: OFF" in str(app.query_one("#status").render())
+        await pilot.press("ctrl+r")
+        assert "Vision: ON" in str(app.query_one("#status").render())
