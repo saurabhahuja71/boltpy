@@ -13,7 +13,20 @@ Screen { background: $background; color: $text; }
 #todo-panel { width: 30; height: auto; min-height: 3; max-height: 12; margin-left: 1; border: round $border; background: $surface; padding: 1 1; overflow-y: auto; }
 
 .system-message { padding: 0 1 0 0; height: auto; margin-bottom: 1; }
-.assistant-streaming { height: auto; margin: 0 0 1 0; padding: 0 1; border: none; }
+.assistant-streaming { height: auto; margin: 0; padding: 0; border: none; }
+
+/* Keep Markdown compact without changing the source stored by Agent. */
+Markdown { padding: 0; }
+MarkdownParagraph,
+MarkdownHeader,
+MarkdownBulletList,
+MarkdownOrderedList,
+MarkdownFence,
+MarkdownBlockQuote,
+MarkdownTable { margin: 0; }
+MarkdownBlockQuote { padding: 0 1; }
+MarkdownFence > Label { padding: 0 1; }
+MarkdownHorizontalRule { height: 1; margin: 0; padding: 0; }
 
 .tool-activity { height: auto; padding: 0 1; margin-bottom: 1; }
 .tool-card { height: auto; padding: 0 1; }

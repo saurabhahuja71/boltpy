@@ -24,6 +24,49 @@ def hello():
     rendered = render_markdown(content)
     assert isinstance(rendered, Markdown)
 
+
+@pytest.mark.asyncio
+async def test_markdown_uses_compact_layout_without_mutating_source():
+    from textual.widgets import Label
+
+    content = "# Heading\n\nParagraph\n\n- item\n\n```python\ndef hello():\n    return 1\n```"
+    app = BoltpyApp(Settings(api_key="test"))
+    async with app.run_test():
+        rendered = render_markdown(content)
+        await app.query_one(ConversationLog).log(rendered)
+        await rendered.update(content)
+        assert rendered.source == content
+        assert rendered.styles.padding.top == 0
+        assert all(child.styles.margin.top == 0 and child.styles.margin.bottom == 0 for child in rendered.children)
+        fence = next(child for child in rendered.children if child.__class__.__name__ == "MarkdownFence")
+        assert fence.query_one(Label).styles.padding.top == 0
+        assert fence.code == "def hello():\n    return 1"
+
+
+@pytest.mark.asyncio
+async def test_streaming_markdown_has_same_compact_presentation():
+    app = BoltpyApp(Settings(api_key="test"))
+    async with app.run_test():
+        transcript = app.query_one(ConversationLog)
+        streaming = Markdown("", classes="assistant-streaming")
+        final = render_markdown("final")
+        await transcript.log(streaming)
+        await transcript.log(final)
+        assert streaming.styles.padding == final.styles.padding
+        assert streaming.styles.margin == final.styles.margin
+        assert [type(child) for child in transcript.children[-2:]] == [Markdown, Markdown]
+
+
+@pytest.mark.asyncio
+async def test_normal_messages_mount_without_spacer_widgets():
+    app = BoltpyApp(Settings(api_key="test"))
+    async with app.run_test():
+        transcript = app.query_one(ConversationLog)
+        app._write("first")
+        app._write("second")
+        assert [type(child).__name__ for child in transcript.children[-2:]] == ["Static", "Static"]
+
+
 @pytest.mark.asyncio
 async def test_theme_command_switches_screen_immediately():
     app = BoltpyApp(Settings(api_key="test"))
