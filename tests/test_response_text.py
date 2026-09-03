@@ -15,6 +15,35 @@ def test_normalize_response_text_collapses_only_excessive_prose_blanks():
     assert normalize_response_text("Paragraph one.\n\nParagraph two.") == "Paragraph one.\n\nParagraph two."
 
 
+def test_normalize_response_text_compacts_real_fastapi_unfenced_code():
+    text = (
+        "# main.py\n\n"
+        "from fastapi import FastAPI\n\n"
+        "app = FastAPI()\n\n"
+        "@app.get(\"/\")\n\n"
+        "def read_root():\n"
+        "return {\"message\": \"Hello\"}"
+    )
+    expected = (
+        "# main.py\n\n"
+        "from fastapi import FastAPI\n"
+        "app = FastAPI()\n\n"
+        "@app.get(\"/\")\n"
+        "def read_root():\n"
+        "return {\"message\": \"Hello\"}"
+    )
+    assert normalize_response_text(text) == expected
+
+
+def test_canonical_prompt_requests_fenced_compact_code():
+    from boltpy.agent.core import Agent
+
+    prompt = Agent(Settings(api_key="test")).messages[0]["content"]
+    assert "multi-line source code in fenced Markdown blocks" in prompt
+    assert "```python" in prompt
+    assert "do not insert a blank line between every statement" in prompt
+
+
 @pytest.mark.parametrize("language", ["python", "bash", "json", ""])
 def test_normalize_response_text_preserves_fenced_code(language):
     opening = f"```{language}\n" if language else "```\n"

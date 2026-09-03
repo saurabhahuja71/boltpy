@@ -79,7 +79,12 @@ _TODO_GUIDANCE = (
 _CODING_GUIDANCE = (
     "\n\nCoding discipline: Inspect and search before editing. Make the smallest targeted change, "
     "preserve surrounding formatting, and validate edits with an appropriate available command. "
-    "Treat tool results as the source of truth. Never claim success without a successful tool result."
+    "Treat tool results as the source of truth. Never claim success without a successful tool result. "
+    "Formatting: Put multi-line source code in fenced Markdown blocks with a language identifier "
+    "when known (for example, ```python, ```bash, or ```json). Keep ordinary code statements compact "
+    "and do not insert a blank line between every statement; use blank lines only for meaningful code "
+    "structure or readability. Normal prose paragraphs may retain one blank line between paragraphs. "
+    "Do not change existing tool output."
 )
 
 _TOOL_DISCIPLINE_GUIDANCE = (
