@@ -7,6 +7,7 @@ import time
 from typing import Any
 from boltpy.agent.permissions import PermissionDecision, PermissionManager, PermissionMode
 from boltpy.agent.providers import Message, Provider, ProviderEvent, build_provider
+from boltpy.agent.text import normalize_response_text
 from boltpy.agent.todos import TaskState
 from boltpy.agent.tools import ToolRegistry, ToolResult, default_registry, parse_arguments
 from boltpy.config import Settings
@@ -158,7 +159,8 @@ class Agent:
                         text_parts.append(text)
                         yield AgentEvent(kind="text", text=text)
                 if not calls:
-                    self.messages.append({"role": "assistant", "content": "".join(text_parts)})
+                    response_text = normalize_response_text("".join(text_parts))
+                    self.messages.append({"role": "assistant", "content": response_text})
                     if self.task_state is not None:
                         self.task_state.current_step = ""
                         self._finalize_task_state()
@@ -174,7 +176,7 @@ class Agent:
                     for blocked_event in self._blocked_events(f"Tool-call loop exceeded {self.max_tool_iterations} iterations"):
                         yield blocked_event
                     return
-                assistant_call_message: Message = {"role": "assistant", "content": "".join(text_parts), "tool_calls": []}
+                assistant_call_message: Message = {"role": "assistant", "content": normalize_response_text("".join(text_parts)), "tool_calls": []}
                 parsed_calls: list[tuple[ProviderEvent, dict[str, Any], str | None]] = []
                 for call in calls:
                     try:

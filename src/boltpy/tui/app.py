@@ -979,6 +979,14 @@ class BoltApp(App[None]):
                     self._set_status(event.status.replace("_", " ").capitalize())
             if not answer_parts:
                 streaming.remove()
+            else:
+                latest_assistant = next(
+                    (message.get("content") for message in reversed(getattr(self.agent, "messages", []))
+                     if message.get("role") == "assistant" and isinstance(message.get("content"), str)),
+                    None,
+                )
+                if latest_assistant is not None:
+                    await streaming.update(latest_assistant)
             finished = True
         finally:
             if finished:
