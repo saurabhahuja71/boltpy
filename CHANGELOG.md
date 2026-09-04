@@ -160,3 +160,6 @@
 - Direct filesystem, command, and Git tool checks passed.
 - Live Ollama model discovery and an isolated end-to-end coding task passed.
 - Package installation and execution outside the source tree passed.
+## 1.2.13
+
+- Make conversation restoration opt-in with `--resume` or `BOLT_RESUME=1`; normal and headless launches now start fresh without altering saved sessions.

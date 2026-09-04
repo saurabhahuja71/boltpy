@@ -22,6 +22,9 @@ class Settings(BaseModel):
     first_launch: bool = False
     mouse_mode: Literal["interactive", "select"] = "select"
     vision_enabled: bool | None = None
+    # Conversation history is opt-in at process startup.  This is deliberately
+    # separate from the session store so persistence never implies restoration.
+    resume: bool = False
 
     def available_models(self) -> list[str]:
         """Return configured models with the active model first."""
@@ -51,6 +54,18 @@ _ENV_FIELDS = {
     "BOLTPY_VISION_ENABLED": "vision_enabled",
 }
 
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+
+
+def resume_from_environment(value: str | None) -> bool:
+    """Parse BOLT_RESUME without treating arbitrary non-empty values as true."""
+    return value is not None and value.strip().casefold() in _TRUE_VALUES
+
+
+def resolve_resume(cli_value: bool | None, settings: Settings) -> Settings:
+    """Apply explicit CLI intent over the already parsed environment policy."""
+    return settings if cli_value is None else settings.model_copy(update={"resume": cli_value})
+
 def load_settings() -> Settings:
     """Load defaults, user config, local config, then environment values."""
     values: dict[str, Any] = {}
@@ -63,7 +78,7 @@ def load_settings() -> Settings:
     for env_name, field_name in _ENV_FIELDS.items():
         if value := os.getenv(env_name):
             values[field_name] = [item.strip() for item in value.split(",") if item.strip()] if field_name == "models" else value
-    settings = Settings(**values)
+    settings = Settings(**values, resume=resume_from_environment(os.getenv("BOLT_RESUME")))
     settings.workspace = settings.workspace.expanduser().resolve()
     session_marker = settings.workspace / ".bolt" / "sessions" / "latest.json"
     explicitly_configured = "permission_mode" in values

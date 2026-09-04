@@ -213,6 +213,8 @@ SSH uses the system executable and the user’s existing `~/.ssh/config`, keys, 
 
 Use `--debug` with `ask` or `exec` to print concise tool-loop diagnostics to stderr without exposing credentials or tokens. `ask` and `exec` also accept `--model` and `--provider` to override the configured values for a single run.
 
+Every Bolt invocation starts a fresh conversation by default, even when a saved session exists. Use `--resume` (or `BOLT_RESUME=1`) to restore `.bolt/sessions/latest.json`; use `--no-resume` to explicitly force a fresh session when the environment enables resume. CLI flags take precedence over `BOLT_RESUME`. These options apply to the TUI and headless `ask`/`exec` modes, and provider launcher wrappers that forward Bolt arguments.
+
 ## Development
 
 ```bash

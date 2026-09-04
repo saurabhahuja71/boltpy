@@ -441,10 +441,7 @@ class BoltApp(App[None]):
         else:
             self._set_mouse_mode(self.settings.mouse_mode)
             self._write("[bold cyan]Bolt[/bold cyan] — ready. Type /help for commands.", markup=True)
-            restored = self.session_store.load()
-            if len(restored) > 1 and isinstance(restored[0], dict) and restored[0].get("role") == "system":
-                self.agent.messages = restored
-                self.agent.restore_task_state(self.session_store.load_task_state())
+            if self.agent.resumed:
                 self._write("[dim]Restored the previous conversation.[/dim]", markup=True)
         self.query_one(TodoPanel).refresh_todos()
         prompt = self.query_one("#prompt", PromptTextArea)

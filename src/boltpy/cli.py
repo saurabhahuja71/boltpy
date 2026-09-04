@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import typer
 from boltpy.agent.core import Agent
-from boltpy.config import load_settings
+from boltpy.config import load_settings, resolve_resume
 
 app = typer.Typer(add_completion=False, no_args_is_help=False, context_settings={"help_option_names": ["-h", "--help"]}, help="A terminal coding agent.")
 
@@ -18,8 +18,11 @@ def main_command(
     model: str | None = typer.Option(None, "--model", help="Model for this session."),
     provider: str | None = typer.Option(None, "--provider", help="Provider for this session."),
     endpoint: str | None = typer.Option(None, "--endpoint", help="Provider endpoint for this session."),
+    resume: bool | None = typer.Option(None, "--resume/--no-resume", help="Resume the previous session; fresh by default. BOLT_RESUME=1 also enables resume."),
     version: bool = typer.Option(False, "--version", "-V", help="Show Bolt version."),
 ) -> None:
+    ctx.ensure_object(dict)
+    ctx.obj["resume"] = resume
     if version:
         try:
             value = importlib.metadata.version("bolt")
@@ -32,6 +35,7 @@ def main_command(
         typer.echo(f"Bolt: workspace does not exist or is not a directory: {project}", err=True)
         raise typer.Exit(code=2)
     settings = load_settings().model_copy(update={"workspace": workspace})
+    settings = resolve_resume(resume, settings)
     updates = {key: value for key, value in {"model": model, "provider": provider, "base_url": endpoint}.items() if value is not None}
     if updates:
         settings = settings.model_copy(update=updates)
@@ -42,9 +46,10 @@ def main_command(
         from boltpy.tui.app import BoltpyApp
         BoltpyApp(settings).run()
 
-def _run_prompt(prompt: str, *, allow_tools: bool, debug: bool, model: str | None = None, provider: str | None = None) -> None:
+def _run_prompt(prompt: str, *, allow_tools: bool, debug: bool, model: str | None = None, provider: str | None = None, resume: bool | None = None) -> None:
     async def run_agent() -> None:
         settings = load_settings().model_copy(update={"workspace": Path.cwd().resolve()})
+        settings = resolve_resume(resume, settings)
         updates = {"model": model} if model else {}
         if provider: updates["provider"] = provider
         if allow_tools: updates["permission_mode"] = "allow"
@@ -65,14 +70,16 @@ def _run_prompt(prompt: str, *, allow_tools: bool, debug: bool, model: str | Non
         typer.echo(f"bolt: {error}", err=True); raise typer.Exit(code=1) from error
 
 @app.command()
-def ask(prompt: str = typer.Argument(...), debug: bool = typer.Option(False, "--debug"), model: str | None = typer.Option(None, "--model"), provider: str | None = typer.Option(None, "--provider")) -> None:
+def ask(ctx: typer.Context, prompt: str = typer.Argument(...), debug: bool = typer.Option(False, "--debug"), model: str | None = typer.Option(None, "--model"), provider: str | None = typer.Option(None, "--provider"), resume: bool | None = typer.Option(None, "--resume/--no-resume", help="Resume the previous session; fresh by default.")) -> None:
     """Ask one question and stream the answer."""
-    _run_prompt(prompt, allow_tools=False, debug=debug, model=model, provider=provider)
+    inherited_resume = ctx.parent.obj.get("resume") if ctx.parent and ctx.parent.obj else None
+    _run_prompt(prompt, allow_tools=False, debug=debug, model=model, provider=provider, resume=resume if resume is not None else inherited_resume)
 
 @app.command(name="exec")
-def exec_command(prompt: str = typer.Argument(...), debug: bool = typer.Option(False, "--debug"), model: str | None = typer.Option(None, "--model"), provider: str | None = typer.Option(None, "--provider")) -> None:
+def exec_command(ctx: typer.Context, prompt: str = typer.Argument(...), debug: bool = typer.Option(False, "--debug"), model: str | None = typer.Option(None, "--model"), provider: str | None = typer.Option(None, "--provider"), resume: bool | None = typer.Option(None, "--resume/--no-resume", help="Resume the previous session; fresh by default.")) -> None:
     """Run a prompt headlessly with tools allowed."""
-    _run_prompt(prompt, allow_tools=True, debug=debug, model=model, provider=provider)
+    inherited_resume = ctx.parent.obj.get("resume") if ctx.parent and ctx.parent.obj else None
+    _run_prompt(prompt, allow_tools=True, debug=debug, model=model, provider=provider, resume=resume if resume is not None else inherited_resume)
 
 @app.command(name="eval")
 def eval_command(

@@ -9,6 +9,7 @@ from boltpy.agent.permissions import PermissionDecision, PermissionManager, Perm
 from boltpy.agent.providers import Message, Provider, ProviderEvent, build_provider
 from boltpy.agent.text import normalize_response_text
 from boltpy.agent.todos import TaskState
+from boltpy.agent.session import SessionStore
 from boltpy.agent.tools import ToolRegistry, ToolResult, default_registry, parse_arguments
 from boltpy.config import Settings
 
@@ -109,6 +110,7 @@ class Agent:
         self.settings = settings
         self.provider = provider or build_provider(settings)
         self.messages: list[Message] = [{"role": "system", "content": settings.system_prompt}]
+        self.resumed = False
         self.registry = registry or default_registry(
             settings.workspace, self.provider, settings.vision_enabled, vision_state,
         )
@@ -119,6 +121,12 @@ class Agent:
         self.task_state: TaskState | None = None
         self.run_stats = AgentRunStats()
         self.messages[0]["content"] = self._system_prompt()
+        if settings.resume:
+            restored = SessionStore(settings.workspace).load()
+            if len(restored) > 1 and isinstance(restored[0], dict) and restored[0].get("role") == "system":
+                self.messages = restored
+                self.restore_task_state(SessionStore(settings.workspace).load_task_state())
+                self.resumed = True
 
     def _system_prompt(self) -> str:
         content = self.settings.system_prompt
